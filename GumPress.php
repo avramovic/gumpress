@@ -3,6 +3,7 @@
 /**
  * @method is_valid_license(DynamicArray $license = null)
  * @method is_local()
+ * @method cidr_match($ip, $subnet)
  */
 class GumPress
 {
@@ -52,6 +53,7 @@ class GumPress
                         'increment_uses_count' => (!in_array($license_key, $activated) && !$this->is_local()) ? 'true' : 'false',
                         'site_url'             => urlencode(get_home_url()),
                         'wp_version'           => get_bloginfo('version'),
+                        'version'              => $this->module_data('Version')
                     ],
                 ]
             );
@@ -75,7 +77,7 @@ class GumPress
         $json = json_decode(wp_remote_retrieve_body($remote));
         if (!in_array($license_key, $activated) && wp_remote_retrieve_response_code($remote) === 200) {
             $activated[] = $license_key;
-            update_option($this->module_slug('license_keys_'.$hostname), $activated);
+            update_option($this->module_slug('license_keys_'.dh(cr($hostname))), $activated);
         }
 
         return new DynamicArray((array)$json);
@@ -161,11 +163,21 @@ class GumPress
 
             if (str_ends_with($domain, '.local') || str_ends_with($domain, '.test') || $domain == 'localhost') {
                 return true;
-            } elseif (str_starts_with($ip, '192.168') || str_starts_with($ip, '10.0') || $ip == '127.0.0.1') {
-                return true;
             }
 
-            return false;
+            return ($ip === '127.0.0.1') || $this->cidr_match($ip, '10.0.0.0/8') || $this->cidr_match($ip, '172.16.0.0/12') || $this->cidr_match($ip, '192.168.0.0/16');
+        } elseif ($method == 'cidr_match') {
+            $ip    = $args[0];
+            $range = $args[1];
+            list ($subnet, $bits) = explode('/', $range);
+            if ($bits === null) {
+                $bits = 32;
+            }
+            $ip     = ip2long($ip);
+            $subnet = ip2long($subnet);
+            $mask   = -1 << (32 - $bits);
+            $subnet &= $mask;
+            return ($ip & $mask) == $subnet;
         }
 
         throw new BadMethodCallException(sprintf("Method %s not found in %s", $method, get_class($this)));
@@ -466,7 +478,7 @@ class GumPress
         if (false === $remote) {
 
             $remote = wp_remote_get(
-                $this->config('update_check_url').'?license='.$license_key.'&site='.urlencode(get_home_url()).'&plugin='.$this->module_slug().'&wp_version='.get_bloginfo('version'),
+                $this->config('update_check_url').'?license_key='.$license_key.'&site_url='.urlencode(get_home_url()).'&product_permalink='.$this->config('short_id').'&wp_version='.get_bloginfo('version').'&version='.$this->module_data('Version'),
                 [
                     'timeout' => 10,
                     'headers' => [

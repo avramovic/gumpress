@@ -2,7 +2,7 @@
 
 if (php_sapi_name() == 'cli') {
     $short_id = $argv[1];
-    $json = $argv[2];
+    $json     = $argv[2];
 
     if (empty($short_id)) {
         print("ERROR: Argument 1 is required!".PHP_EOL);
@@ -610,6 +610,11 @@ class GumPress
 
     }
 
+    public function was_config_encrypted()
+    {
+        return (bool)$this->config('_encrypted', false);
+    }
+
 
     public static array $plugins = [];
 
@@ -629,7 +634,8 @@ class GumPress
                 error_reporting(0);
                 wp_die(dirname(plugin_basename($plugin_file)).": Config was tampered with. Please reinstall the plugin!");
             }
-            $options = @jd(r(gi(bd(r($options))))) ?: [];
+            $options               = @jd(r(gi(bd(r($options))))) ?: [];
+            $options['_encrypted'] = true;
         }
 
         $type = 'plugin';
@@ -654,6 +660,7 @@ class GumPress
             'cache_time'        => WEEK_IN_SECONDS,
             'plugins_page_link' => true,
             'max_uses'          => 1,
+            '_encrypted'        => false,
         ], $options);
 
         $options['callbacks'] = $callbacks;

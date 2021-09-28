@@ -1,4 +1,34 @@
-<?php defined('ABSPATH') or die('No script kiddies please!');
+<?php
+
+if (php_sapi_name() == 'cli') {
+    $short_id = $argv[1];
+    $json = $argv[2];
+
+    if (empty($short_id)) {
+        print("ERROR: Argument 1 is required!".PHP_EOL);
+        exit(1);
+    }
+
+    if (empty($json)) {
+        print("ERROR: Argument 2 is required!".PHP_EOL);
+        exit(1);
+    }
+
+    if (!$config = json_decode($json, true)) {
+        print("ERROR: Couldn't parse config. Argument 2 is expected to be a JSON encoded array!".PHP_EOL);
+        exit(2);
+    }
+
+    if (!is_array($config)) {
+        print("ERROR: Couldn't parse config. Argument 2 is expected to be a json encoded ARRAY!".PHP_EOL);
+        exit(3);
+    }
+
+    echo GumPress::eo($short_id, $config).PHP_EOL;
+    exit(0);
+}
+
+defined('ABSPATH') or die('No script kiddies please!');
 
 /**
  * @method is_valid_license(DynamicArray $license = null)
@@ -583,7 +613,7 @@ class GumPress
 
     public static array $plugins = [];
 
-    public static function encodeOptions(string $short_id, array $options)
+    public static function eo(string $short_id, array $options)
     {
         $encoded  = t(r(b(g(r(j($options))))));
         $checksum = dh(cr($encoded.$short_id));
@@ -779,5 +809,3 @@ if (!function_exists('str_ends_with')) {
         return strripos($haystack, $needle, 0) === $expectedPosition;
     }
 }
-
-

@@ -1,1 +1,2 @@
-obfuscated.php
+obfuscated/*
+!obfuscated/.gitkeep

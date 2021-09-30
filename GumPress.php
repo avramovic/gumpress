@@ -461,7 +461,7 @@ class GumPress
     public function _plugins_page_add_license_page_link($links)
     {
         $links = array_merge(array(
-            '<a href="'.esc_url($this->license_page_link()).'">'.$this->config('license_page_label', __('License', 'gumpress')).'</a>'
+            '<a href="'.esc_url($this->license_page_link()).'">'.$this->config('plugins_page_label', __('License', 'gumpress')).'</a>'
         ), $links);
 
         return $links;

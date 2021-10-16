@@ -36,8 +36,8 @@ function g($s)
 }
 
 if (php_sapi_name() == 'cli') {
-    $short_id = $argv[1];
-    $json     = $argv[2];
+    $short_id = $argv[1] ?? null;
+    $json     = $argv[2] ?? null;
 
     if (empty($short_id)) {
         print("ERROR: Argument 1 is required!".PHP_EOL);

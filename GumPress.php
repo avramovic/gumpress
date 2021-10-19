@@ -2,11 +2,6 @@
 
 defined('ABSPATH') or die('No script kiddies please!');
 
-/**
- * @method is_valid_license(DynamicArray $license = null)
- * @method is_local()
- * @method cidr_match($ip, $subnet)
- */
 class GumPress
 {
     private array $config;
@@ -82,7 +77,7 @@ class GumPress
             update_option($this->module_slug('license_keys_'.dh(cr($hostname))), $activated);
         }
 
-        return new DynamicArray((array)$json);
+        return new GumPressArrayObject((array)$json);
     }
 
     public function is_recurring($license = null)
@@ -101,88 +96,88 @@ class GumPress
         return $this->is_recurring($license) ? 'recurring' : 'purchase';
     }
 
-    public function __call($method, $args)
+    public function is_valid_license($license = null)
     {
-        if ($method == 'is_valid_license') {
-            $license = $args[0] ?? $this->license();
+        $license = $license ?? $this->license();
 
-            if (false === $license) {
-                $this->description = __('Unable to load license information!', 'gumpress');
+        if (false === $license) {
+            $this->description = __('Unable to load license information!', 'gumpress');
+            return false;
+        } elseif (is_null($license)) {
+            $this->description = __('No license key found.', 'gumpress');
+            return false;
+        } elseif (!$license->get('success')) {
+            $this->description = __($license->get('message'), 'gumpress');
+            return false;
+        } elseif ($license->get('purchase')->get('test') && $this->config('disallow_test_keys')) {
+            $this->description = __('This is a testing license key and those are not allowed!', 'gumpress');
+            return false;
+        } elseif ($max = $this->config('max_uses')) {
+            $uses = $license->get('uses');
+            if ($uses > $max) {
+                $this->description = sprintf(__('Maximum number of activations reached! %d / %d', 'gumpress'), $uses, $max);
                 return false;
-            } elseif (is_null($license)) {
-                $this->description = __('No license key found.', 'gumpress');
-                return false;
-            } elseif (!$license->get('success')) {
-                $this->description = __($license->get('message'), 'gumpress');
-                return false;
-            } elseif ($license->get('purchase')->get('test') && $this->config('disallow_test_keys')) {
-                $this->description = __('This is a testing license key and those are not allowed!', 'gumpress');
-                return false;
-            } elseif ($max = $this->config('max_uses')) {
-                $uses = $license->get('uses');
-                if ($uses > $max) {
-                    $this->description = sprintf(__('Maximum number of activations reached! %d / %d', 'gumpress'), $uses, $max);
-                    return false;
+            }
+
+        } elseif ($license->get('purchase')->get('refunded')) {
+            $this->description = __('Your purchase was refunded!', 'gumpress');
+            return false;
+        } elseif ($license->get('purchase')->get('disputed') && !$license->get('purchase')->get('dispute_won')) {
+            $this->description = __('Your purchase was disputed!', 'gumpress');
+            return false;
+        } elseif ($license->get('purchase')->get('subscription_failed_at')) {
+            $date  = new \DateTime($license->get('purchase')->get('subscription_failed_at'));
+            $grace = $this->config('grace_period', 7);
+            if ($grace > 0) {
+                $now  = new \DateTime();
+                $diff = (int)($now - $date)->format('%d');
+                $left = $grace - $diff;
+
+                if ($left > 0) {
+                    $this->description = sprintf(__('Your subscription payment failed on %s. Your license will be deactivated in %d days.', 'gumpress'), $date->format('Y-m-d (H:i)'), $left);
+                    return true;
                 }
-
-            } elseif ($license->get('purchase')->get('refunded')) {
-                $this->description = __('Your purchase was refunded!', 'gumpress');
-                return false;
-            } elseif ($license->get('purchase')->get('disputed') && !$license->get('purchase')->get('dispute_won')) {
-                $this->description = __('Your purchase was disputed!', 'gumpress');
-                return false;
-            } elseif ($license->get('purchase')->get('subscription_failed_at')) {
-                $date  = new \DateTime($license->get('purchase')->get('subscription_failed_at'));
-                $grace = $this->config('grace_period', 7);
-                if ($grace > 0) {
-                    $now  = new \DateTime();
-                    $diff = (int)($now - $date)->format('%d');
-                    $left = $grace - $diff;
-
-                    if ($left > 0) {
-                        $this->description = sprintf(__('Your subscription payment failed on %s. Your license will be deactivated in %d days.', 'gumpress'), $date->format('Y-m-d (H:i)'), $left);
-                        return true;
-                    }
-                }
-
-                $this->description = sprintf(__('Your subscription payment failed on %s', 'gumpress'), $date->format('Y-m-d (H:i)'));
-                return false;
-            } elseif ($license->get('purchase')->get('subscription_ended_at')) {
-                $date              = new \DateTime($license->get('purchase')->get('subscription_ended_at'));
-                $this->description = sprintf(__('Your subscription ended on %s', 'gumpress'), $date->format('Y-m-d (H:i)'));
-                return false;
-            } elseif ($license->get('purchase')->get('subscription_cancelled_at')) {
-                $date              = new \DateTime($license->get('purchase')->get('subscription_cancelled_at'));
-                $this->description = sprintf(__('Your subscription was cancelled on', 'gumpress'), $date->format('Y-m-d (H:i)'));
-                return false;
             }
 
-            $this->description = __('Your license is valid!', 'gumpress');
-            return true;
-        } elseif ($method == 'is_local') {
-            $domain = parse_url(get_home_url(), PHP_URL_HOST);
-            $ip     = $_SERVER["SERVER_ADDR"];
-
-            if (str_ends_with($domain, '.local') || str_ends_with($domain, '.test') || $domain == 'localhost') {
-                return true;
-            }
-
-            return ($ip === '127.0.0.1') || $this->cidr_match($ip, '10.0.0.0/8') || $this->cidr_match($ip, '172.16.0.0/12') || $this->cidr_match($ip, '192.168.0.0/16');
-        } elseif ($method == 'cidr_match') {
-            $ip    = $args[0];
-            $range = $args[1];
-            list ($subnet, $bits) = explode('/', $range);
-            if ($bits === null) {
-                $bits = 32;
-            }
-            $ip     = ip2long($ip);
-            $subnet = ip2long($subnet);
-            $mask   = -1 << (32 - $bits);
-            $subnet &= $mask;
-            return ($ip & $mask) == $subnet;
+            $this->description = sprintf(__('Your subscription payment failed on %s', 'gumpress'), $date->format('Y-m-d (H:i)'));
+            return false;
+        } elseif ($license->get('purchase')->get('subscription_ended_at')) {
+            $date              = new \DateTime($license->get('purchase')->get('subscription_ended_at'));
+            $this->description = sprintf(__('Your subscription ended on %s', 'gumpress'), $date->format('Y-m-d (H:i)'));
+            return false;
+        } elseif ($license->get('purchase')->get('subscription_cancelled_at')) {
+            $date              = new \DateTime($license->get('purchase')->get('subscription_cancelled_at'));
+            $this->description = sprintf(__('Your subscription was cancelled on', 'gumpress'), $date->format('Y-m-d (H:i)'));
+            return false;
         }
 
-        throw new BadMethodCallException(sprintf("Method %s not found in %s", $method, get_class($this)));
+        $this->description = __('Your license is valid!', 'gumpress');
+        return true;
+    }
+
+    public function is_local()
+    {
+        $domain = parse_url(get_home_url(), PHP_URL_HOST);
+        $ip     = $_SERVER["SERVER_ADDR"];
+
+        if (str_ends_with($domain, '.local') || str_ends_with($domain, '.test') || $domain == 'localhost') {
+            return true;
+        }
+
+        return ($ip === '127.0.0.1') || $this->cidr_match($ip, '10.0.0.0/8') || $this->cidr_match($ip, '172.16.0.0/12') || $this->cidr_match($ip, '192.168.0.0/16');
+    }
+
+    private function cidr_match($ip, $range)
+    {
+        list ($subnet, $bits) = explode('/', $range);
+        if ($bits === null) {
+            $bits = 32;
+        }
+        $ip     = ip2long($ip);
+        $subnet = ip2long($subnet);
+        $mask   = -1 << (32 - $bits);
+        $subnet &= $mask;
+        return ($ip & $mask) == $subnet;
     }
 
     public function license_description()
@@ -323,7 +318,6 @@ class GumPress
 
     public function _license_fields_markup()
     {
-
         echo <<<MARKUP
         <input type="text" id="{$this->module_slug('license_key')}"
                name="{$this->module_slug('license_key')}"
@@ -350,7 +344,7 @@ class GumPress
 
     public function _replace_footer_admin()
     {
-        echo '<em>Protected with &hearts; by <a href="https://wordpress.org/plugins/wooplatnica/" target="_blank">GumPress</a></em>. ';
+        echo '<em>Protected with &hearts; by <a href="https://gumpress.eu" target="_blank">GumPress</a></em>. ';
     }
 
     public function _render_license_page()
@@ -469,7 +463,7 @@ class GumPress
 
 
     /**
-     * @return DynamicArray|false
+     * @return GumPressArrayObject|false
      */
     public function _update_server_request()
     {
@@ -500,7 +494,7 @@ class GumPress
             set_transient($cache_key, $remote, DAY_IN_SECONDS);
         }
 
-        $remote = new DynamicArray((array)json_decode(wp_remote_retrieve_body($remote)));
+        $remote = new GumPressArrayObject((array)json_decode(wp_remote_retrieve_body($remote)));
 
         return $remote;
     }
@@ -647,7 +641,7 @@ class GumPress
 
 }
 
-class DynamicArray implements ArrayAccess
+class GumPressArrayObject implements ArrayAccess
 {
     public array $data = [];
 
@@ -706,7 +700,7 @@ class DynamicArray implements ArrayAccess
     }
 }
 
-class GumroadLicense extends DynamicArray
+class GumroadLicense extends GumPressArrayObject
 {
 }
 

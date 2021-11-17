@@ -18,15 +18,16 @@ Download GumPress.php file from this repository and put it in your module folder
 For the sake of our example, let's say our Gumroad product ID is "YOUR_GUMROAD_ID". In reality, you'd replace that with your real product ID. The integration code, which you should put at the very top of your main module PHP file (right after "<?php"), would look like this:
 
 ```
-!class_exists('GumPress')) or require_once(dirname(__FILE__)."/GumPress.php");
-
+if(!class_exists('GumPress')) {
+    require_once(dirname(__FILE__)."/GumPress.php");
+}
 GumPress::register(__FILE__, 'YOUR_GUMROAD_ID');
 ```
 
 That's it? Yes! Well... yes and no. While this initialises the license checking system and a license page for your module, it doesn't do anything else. In other words, invalid licenses won't prevent your users from using your module or any of the "pro" options your module may offer. That's up to you, but in most cases you'd check it like this:
 
 ```
-if (GumPress::for('YOUR_GUMROAD_ID')->is_valid_license() {
+if (GumPress::for('YOUR_GUMROAD_ID')->is_valid_license()) {
     // do stuff when license is VALID
 } else {
     // do stuff when license is INVALID

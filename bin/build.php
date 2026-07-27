@@ -129,6 +129,16 @@ $out .= " */\n\n";
 $out .= "declare(strict_types=1);\n\n";
 $out .= "namespace GumPress\\{$nsSuffix} {\n\n";
 
+// Two different plugins/themes on one site can each bundle a single-file
+// build of the exact same GumPress version — unlike the gumpress/ folder
+// form, a plain concatenation has no include-guard, so the second one to
+// load would fatal trying to redeclare every class here. Guard the whole
+// block the same way src/load.php guards the folder form; the code AFTER
+// this namespace block (the facade's own $GLOBALS['gumpress']['sources']
+// registration) still runs on every copy regardless — only re-declaring
+// the shared engine classes is skipped.
+$out .= "if (!class_exists(__NAMESPACE__ . '\\\\Engine', false)) {\n\n";
+
 foreach ($order as $rel) {
     $body = file_get_contents("$srcRoot/$rel");
     $body = preg_replace('/^<\?php\s*/', '', $body, 1);
@@ -137,7 +147,8 @@ foreach ($order as $rel) {
     $out .= trim($body) . "\n\n";
 }
 
-$out .= "}\n\n";
+$out .= "}\n\n"; // end class_exists guard
+$out .= "}\n\n"; // end namespace block
 
 $facade = file_get_contents($srcRoot . '/gumpress.php');
 $facade = preg_replace('/^<\?php\s*/', '', $facade, 1);

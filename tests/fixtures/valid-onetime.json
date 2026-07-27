@@ -1,0 +1,22 @@
+{
+    "success": true,
+    "uses": 1,
+    "purchase": {
+        "seller_id": "abc123",
+        "product_id": "prod123",
+        "product_name": "Acme Plugin",
+        "permalink": "acme",
+        "email": "buyer@example.com",
+        "price": 4900,
+        "test": false,
+        "refunded": false,
+        "disputed": false,
+        "dispute_won": false,
+        "chargebacked": false,
+        "recurrence": null,
+        "subscription_id": null,
+        "variants": "",
+        "custom_fields": ["Company: Acme Inc", "Seats: 5"]
+    },
+    "license_key": "AAAA-BBBB-CCCC-DDDD"
+}

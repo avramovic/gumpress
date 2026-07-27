@@ -1,37 +1,109 @@
-# gumpress
-Licensing WordPress themes and plugins through Gumroad made easy!
+# GumPress
 
-## Modules
+Drop-in Gumroad licensing for WordPress plugins and themes.
 
-We use term "modules" for both themes and plugins, and it's not to confuse your, it's just easier to use "module" instead of "theme and/or plugin" every time we try to explain how to use GumPress. So be prepared to see the word "module" throughout our documentation and code.
+## What's new in 2.0
 
-## Find your Gumroad product ID
+GumPress 2.0 is a full rewrite. If you used 1.x, read [MIGRATION.md](MIGRATION.md)
+first — this is a clean break, not a compatible upgrade.
 
-We work with Gumroad licensing system, so make sure you've set up your product on Gumroad and find your product ID. Once you have found it, memorise it (or copy it somewhere in your computer) as you'll need it for our integration.
+- **The product ID is declared once**, at `register()`, and never repeated.
+  Every check afterwards is a bare static call: `GumPress::valid()`.
+- **Subscriptions are properly supported**: grace periods, cancellation that
+  stays valid through the paid period, tiers parsed from Gumroad's
+  `variants`, and Gumroad checkout custom fields.
+- **A self-hosted `license_check_url` proxy can now push config to the
+  plugin**, not just answer verify calls — a whitelisted set of options
+  (seat limit, grace periods, admin-UI toggles) can be overridden per
+  license without a new release, with a per-key opt-out
+  (`lock_config`) for anything you never want a server touching. See
+  [Server-controlled overrides](gumpress/README.md#server-controlled-overrides).
+- **Config obfuscation is AES-256-CBC + HMAC-SHA256** (`gp1`), replacing the
+  old CRC32 scheme, whose checksum could render as anywhere from 1 to 8 hex
+  characters while the decoder always read 8 — silently corrupting roughly
+  1 in 16 generated configs. Still tamper-*evidence*, not real security —
+  see [Obfuscating your config](gumpress/README.md#obfuscating-your-config).
+- **Distributed as a `gumpress/` folder**, not a single file — several
+  plugins/themes on one site can each bundle their own copy, at different
+  versions, without conflicting. A single-file build is still produced for
+  anyone who prefers that shape (`dist/GumPress.php` after `build.sh`).
+- **PHP 8.0+.**
+- A long list of correctness and security fixes — see below.
 
-## Download the PHP class
+## Quick start
 
-Download GumPress.php file from this repository and put it in your module folder, next to your main module PHP file (plugin-name/plugin-name.php or theme-name/functions.php). Next, we need to load the class (if it's not already loaded) and initialise it in the said file.
+Copy the `gumpress/` folder into your plugin or theme, next to its main file,
+then add two lines at the very top of that file:
 
-## Class loading and initialisation
+```php
+require_once __DIR__ . '/gumpress/gumpress.php';
 
-For the sake of our example, let's say our Gumroad product ID is "YOUR_GUMROAD_ID". In reality, you'd replace that with your real product ID. The integration code, which you should put at the very top of your main module PHP file (right after "<?php"), would look like this:
-
+GumPress::register(__FILE__, 'your-gumroad-permalink', [
+    'payment_grace' => 7,
+]);
 ```
-if(!class_exists('GumPress')) {
-    require_once(dirname(__FILE__)."/GumPress.php");
+
+That's it for setup. It registers a License settings page (under
+Settings → License for a plugin, Appearance → License for a theme), an admin
+notice when the key is missing or invalid, and — if `update_check_url` is
+set — a self-hosted update checker.
+
+Enforcement is up to you, same as before:
+
+```php
+if (GumPress::valid()) {
+    // pro features
 }
-GumPress::register(__FILE__, 'YOUR_GUMROAD_ID');
 ```
 
-That's it? Yes! Well... yes and no. While this initialises the license checking system and a license page for your module, it doesn't do anything else. In other words, invalid licenses won't prevent your users from using your module or any of the "pro" options your module may offer. That's up to you, but in most cases you'd check it like this:
+Anywhere else in your module, no ID needed:
+
+```php
+GumPress::status();          // machine code, e.g. 'payment_failed_grace'
+GumPress::reason();          // translated human message
+GumPress::license_key();
+GumPress::is_subscription();
+GumPress::tier();             // 'Pro' — parsed from Gumroad `variants`
+GumPress::has_tier('Pro');
+GumPress::meta('Company');    // a Gumroad checkout custom field
+GumPress::meta();             // all custom fields, as an assoc array
+GumPress::license();          // the full License value object
+```
+
+If you have more than one GumPress-licensed product and need to check one
+from outside its own directory (a theme template override, a shared
+mu-plugin helper), use the explicit form instead of the bare static calls:
+
+```php
+GumPress::for('other-product')->valid();
+```
+
+See [gumpress/README.md](gumpress/README.md) for the full configuration
+reference.
+
+## Repository layout
 
 ```
-if (GumPress::for('YOUR_GUMROAD_ID')->is_valid_license()) {
-    // do stuff when license is VALID
-} else {
-    // do stuff when license is INVALID
-}
+gumpress/           The drop-in library. Copy this folder into your plugin/theme.
+tests/              PHPUnit suite + hand-rolled WP stubs — no WordPress or
+                    Gumroad account required to run it.
+bin/build.php       Used by build.sh to produce the dist/ artifacts.
+build.sh            Lints, then builds dist/gumpress/ and dist/GumPress.php.
+                    Pass --obfuscate to also produce an obfuscated build
+                    (requires yakpro-po on PATH and a sibling phpz checkout).
+encrypt.php         CLI tool to obfuscate a config array for GumPress::register().
 ```
 
-And now that's it... sort of. There's more you can learn about [configuring GumPress](https://gumpress.tawk.help/article/configuring-gumpress), to fine-tune it for your needs. Also, license enforcement is completely up to you!
+## Development
+
+```
+composer install
+composer test    # phpunit
+composer lint    # php -l on every source file
+composer stan     # phpstan, WordPress-aware stubs
+./build.sh        # produce dist/gumpress/ and dist/GumPress.php
+```
+
+## License
+
+MIT.

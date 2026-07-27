@@ -1,0 +1,356 @@
+<?php
+
+declare(strict_types=1);
+
+namespace GumPress\V2;
+
+/**
+ * One licensed plugin or theme. Unlike v1's GumPress::for($id), which
+ * constructed a brand-new instance on every call (so a status computed by
+ * one call was thrown away by the next, and license() was re-derived three
+ * or four times per admin page load), a Module is created once by
+ * Engine::create() and lives for the rest of the request.
+ */
+final class Module
+{
+    private string $file;
+    private string $product;
+    private Config $base_config;
+    private ?Config $effective_config_cache = null;
+    private string $type;
+    private array $owned_dirs;
+    private bool $network_wide;
+    private Api $api;
+    private ?Status $status_cache = null;
+
+    private function __construct(string $file, string $product, Config $config)
+    {
+        $this->file = $file;
+        $this->product = $product;
+        $this->base_config = $config;
+        $this->type = $this->detect_type();
+        $this->owned_dirs = $this->detect_owned_dirs();
+        $this->network_wide = is_multisite() && $this->detect_network_activation();
+        $this->api = new Api($this);
+    }
+
+    public static function create(string $file, string $product, Config $config): self
+    {
+        return new self($file, $product, $config);
+    }
+
+    public function product_id(): string
+    {
+        return $this->product;
+    }
+
+    /** Base config (defaults + register() options), never with server overrides applied. */
+    public function base_config(): Config
+    {
+        return $this->base_config;
+    }
+
+    /**
+     * Effective config: base_config() with the server's own overrides
+     * (see Overrides::apply()) layered on top, lazily built from the last
+     * verify response and memoized for the rest of the request.
+     */
+    public function config(): Config
+    {
+        if ($this->effective_config_cache === null) {
+            $this->effective_config_cache = Overrides::apply($this->base_config, $this->api->overrides());
+        }
+
+        return $this->effective_config_cache;
+    }
+
+    /** Called by Api after a fresh verification, and on a license key change. */
+    public function forget_effective_config(): void
+    {
+        $this->effective_config_cache = null;
+        $this->status_cache = null;
+    }
+
+    public function api(): Api
+    {
+        return $this->api;
+    }
+
+    public function type(): string
+    {
+        return $this->type;
+    }
+
+    public function owned_dirs(): array
+    {
+        return $this->owned_dirs;
+    }
+
+    public function is_network_wide(): bool
+    {
+        return $this->network_wide;
+    }
+
+    private function detect_type(): string
+    {
+        $configured = $this->base_config->get('type');
+        if (in_array($configured, ['plugin', 'theme'], true)) {
+            return $configured;
+        }
+
+        // Auto-detect from the file's location rather than v1's
+        // strpos($file, '/themes/'), which silently misclassifies every theme
+        // as a plugin on Windows (backslash paths never contain '/themes/').
+        $file = wp_normalize_path($this->file);
+        if (function_exists('get_theme_root') && str_starts_with($file, wp_normalize_path(get_theme_root()) . '/')) {
+            return 'theme';
+        }
+
+        return 'plugin';
+    }
+
+    private function detect_owned_dirs(): array
+    {
+        $dirs = [];
+
+        if ($this->type === 'theme') {
+            // Child themes load functions.php before the parent theme's, so a
+            // module registered from the parent must still resolve calls made
+            // from the child's files: claim both roles.
+            if (function_exists('get_template_directory')) {
+                $dirs[] = wp_normalize_path(get_template_directory());
+            }
+            if (function_exists('get_stylesheet_directory')) {
+                $dirs[] = wp_normalize_path(get_stylesheet_directory());
+            }
+        }
+
+        $dirs[] = wp_normalize_path(dirname($this->file));
+
+        return array_values(array_unique($dirs));
+    }
+
+    private function detect_network_activation(): bool
+    {
+        if ($this->type !== 'plugin' || !function_exists('is_plugin_active_for_network')) {
+            return false;
+        }
+
+        return is_plugin_active_for_network($this->module_basename());
+    }
+
+    public function module_basename(): string
+    {
+        return $this->type === 'plugin' && function_exists('plugin_basename')
+            ? plugin_basename($this->file)
+            : wp_normalize_path($this->file);
+    }
+
+    public function slug(): string
+    {
+        return $this->type === 'theme'
+            ? basename(dirname($this->module_basename()))
+            : dirname($this->module_basename());
+    }
+
+    public function text_domain(): string
+    {
+        return (string) ($this->base_config->get('text_domain') ?? $this->slug());
+    }
+
+    /**
+     * @return array|string|null
+     */
+    public function module_data(?string $key = null)
+    {
+        $data = $this->read_module_data();
+
+        return $key === null ? $data : ($data[$key] ?? null);
+    }
+
+    private function read_module_data(): array
+    {
+        static $cache = [];
+        if (isset($cache[$this->product])) {
+            return $cache[$this->product];
+        }
+
+        if ($this->type === 'plugin') {
+            // get_file_data() lives in wp-includes/functions.php, which core loads
+            // unconditionally — unlike get_plugin_data(), it's always available,
+            // including on front-end requests. v1 used get_plugin_data() guarded by
+            // function_exists(), which silently fell through to reading THEME
+            // headers on the frontend, reporting a plugin's own name/version wrong.
+            $headers = get_file_data($this->file, [
+                'Name' => 'Plugin Name',
+                'Version' => 'Version',
+                'Author' => 'Author',
+                'Description' => 'Description',
+            ]);
+        } else {
+            $theme = wp_get_theme($this->slug());
+            $headers = [
+                'Name' => (string) $theme->get('Name'),
+                'Version' => (string) $theme->get('Version'),
+                'Author' => wp_strip_all_tags((string) $theme->get('Author')),
+                'Description' => (string) $theme->get('Description'),
+            ];
+        }
+
+        return $cache[$this->product] = $headers;
+    }
+
+    public function license_key(): ?string
+    {
+        $key = $this->option_get($this->option_name('license_key'), '');
+
+        return $key === '' ? null : (string) $key;
+    }
+
+    public function set_license_key(string $key): void
+    {
+        $this->option_set($this->option_name('license_key'), $key);
+        $this->forget_effective_config();
+    }
+
+    public function option_name(string $suffix): string
+    {
+        return 'gumpress_' . $this->product . '_' . $suffix;
+    }
+
+    /**
+     * @param mixed $default
+     * @return mixed
+     */
+    private function option_get(string $name, $default)
+    {
+        return $this->network_wide ? get_site_option($name, $default) : get_option($name, $default);
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function option_set(string $name, $value): void
+    {
+        if ($this->network_wide) {
+            update_site_option($name, $value);
+        } else {
+            update_option($name, $value, false);
+        }
+    }
+
+    public function status(): Status
+    {
+        if ($this->status_cache !== null) {
+            return $this->status_cache;
+        }
+
+        if ($this->license_key() === null) {
+            return $this->status_cache = new Status(Status::NO_KEY);
+        }
+
+        // Never performs network I/O — verification is scheduled separately
+        // via Api::ensure_scheduled() / the daily refresh cron event.
+        $license = $this->api->license();
+        $reachable = $this->api->last_reachable();
+
+        return $this->status_cache = Validator::evaluate($license, $reachable, $this->api->valid_at(), $this->config());
+    }
+
+    public function valid(): bool
+    {
+        return $this->status()->is_valid();
+    }
+
+    public function reason(): string
+    {
+        return Strings::reason($this->status(), $this->text_domain());
+    }
+
+    public function license(): ?License
+    {
+        return $this->api->license();
+    }
+
+    public function is_subscription(): bool
+    {
+        return (bool) $this->license()?->is_subscription();
+    }
+
+    public function tier(): ?string
+    {
+        return $this->license()?->tier();
+    }
+
+    public function has_tier(string $tier): bool
+    {
+        return (bool) $this->license()?->has_tier($tier);
+    }
+
+    /**
+     * @return array|string|null
+     */
+    public function meta(?string $key = null)
+    {
+        $license = $this->license();
+        if ($license === null) {
+            return $key === null ? [] : null;
+        }
+
+        return $key === null ? $license->meta() : $license->meta_field($key);
+    }
+
+    /**
+     * @return mixed
+     */
+    public function extra(?string $key = null)
+    {
+        return $this->license()?->extra($key);
+    }
+
+    public function seat_over_limit(): bool
+    {
+        return Validator::seat_over_limit($this->license(), $this->config())
+            && $this->config()->get('max_uses_policy', 'warn') === 'warn';
+    }
+
+    public function license_page_link(): string
+    {
+        $base = $this->type === 'plugin' ? 'options-general.php' : 'themes.php';
+
+        return $base . '?page=' . rawurlencode($this->page_slug());
+    }
+
+    public function page_slug(): string
+    {
+        return 'gumpress-' . $this->product;
+    }
+
+    public function manage_capability(): string
+    {
+        return $this->type === 'plugin' ? 'manage_options' : 'switch_themes';
+    }
+
+    public function boot_hooks(): void
+    {
+        Admin::register($this);
+
+        if ($this->config()->get('update_check_url')) {
+            Updater::register($this);
+        }
+
+        $cron_hook = 'gumpress_refresh_' . $this->product;
+        add_action($cron_hook, function () {
+            $this->api->force_refresh();
+        });
+        if (!wp_next_scheduled($cron_hook)) {
+            wp_schedule_event(time() + wp_rand(0, HOUR_IN_SECONDS), 'twicedaily', $cron_hook);
+        }
+
+        add_action('admin_init', function () {
+            if (is_admin() && !wp_doing_ajax() && current_user_can($this->manage_capability())) {
+                $this->api->ensure_scheduled();
+            }
+        });
+    }
+}

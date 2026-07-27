@@ -1,0 +1,25 @@
+{
+    "success": true,
+    "uses": 3,
+    "purchase": {
+        "seller_id": "abc123",
+        "product_id": "prod456",
+        "product_name": "Acme Pro",
+        "permalink": "acme-pro",
+        "email": "subscriber@example.com",
+        "price": 900,
+        "test": false,
+        "refunded": false,
+        "disputed": false,
+        "dispute_won": false,
+        "chargebacked": false,
+        "recurrence": "monthly",
+        "subscription_id": "sub_789",
+        "subscription_failed_at": null,
+        "subscription_cancelled_at": null,
+        "subscription_ended_at": null,
+        "variants": "(Tier 1)",
+        "custom_fields": {"Company": "Acme Inc", "Seats": "10"}
+    },
+    "license_key": "EEEE-FFFF-GGGG-HHHH"
+}

@@ -1,0 +1,18 @@
+{
+    "success": true,
+    "uses": 2,
+    "purchase": {
+        "email": "subscriber@example.com",
+        "test": false,
+        "refunded": false,
+        "disputed": false,
+        "chargebacked": false,
+        "recurrence": "monthly",
+        "subscription_id": "sub_111",
+        "subscription_failed_at": "2024-01-01T00:00:00Z",
+        "subscription_cancelled_at": null,
+        "subscription_ended_at": null,
+        "variants": "(Pro)"
+    },
+    "license_key": "PFAIL-000-0000-0000"
+}

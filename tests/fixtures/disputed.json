@@ -1,0 +1,15 @@
+{
+    "success": true,
+    "uses": 1,
+    "purchase": {
+        "email": "buyer@example.com",
+        "test": false,
+        "refunded": false,
+        "disputed": true,
+        "dispute_won": false,
+        "chargebacked": false,
+        "recurrence": null,
+        "variants": ""
+    },
+    "license_key": "DISP-0000-0000-0000"
+}

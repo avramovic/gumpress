@@ -1,0 +1,13 @@
+{
+    "success": true,
+    "uses": 1,
+    "purchase": {
+        "email": "buyer@example.com",
+        "test": false,
+        "recurrence": "monthly",
+        "subscription_id": "sub_444",
+        "subscription_failed_at": "not-a-real-date",
+        "variants": ""
+    },
+    "license_key": "MALF-0000-0000-0000"
+}

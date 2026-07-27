@@ -1,0 +1,22 @@
+{
+    "name": "avramovic/gumpress",
+    "description": "Drop-in Gumroad licensing for WordPress plugins and themes.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6 || ^10.5",
+        "phpstan/phpstan": "^1.11",
+        "szepeviktor/phpstan-wordpress": "^1.3"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "scripts": {
+        "test": "phpunit",
+        "lint": "find gumpress -name '*.php' -print0 | xargs -0 -n1 php -l",
+        "stan": "phpstan analyse"
+    }
+}

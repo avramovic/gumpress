@@ -1,0 +1,14 @@
+{
+    "success": true,
+    "uses": 1,
+    "purchase": {
+        "email": "buyer@example.com",
+        "test": false,
+        "refunded": true,
+        "disputed": false,
+        "chargebacked": false,
+        "recurrence": null,
+        "variants": ""
+    },
+    "license_key": "RFND-0000-0000-0000"
+}

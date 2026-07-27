@@ -1,0 +1,14 @@
+{
+    "success": true,
+    "uses": 1,
+    "purchase": {
+        "email": "buyer@example.com",
+        "test": false,
+        "refunded": false,
+        "disputed": false,
+        "chargebacked": true,
+        "recurrence": null,
+        "variants": ""
+    },
+    "license_key": "CHBK-0000-0000-0000"
+}

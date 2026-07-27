@@ -1,0 +1,10 @@
+{
+    "success": true,
+    "uses": 1,
+    "purchase": {
+        "email": "buyer@example.com",
+        "test": false,
+        "custom_fields": ["Company: Acme Inc", "Seats: 5", "malformed field with no colon"]
+    },
+    "license_key": "STR1-0000-0000-0000"
+}

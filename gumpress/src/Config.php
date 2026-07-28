@@ -24,6 +24,15 @@ final class Config
         'type' => null, // 'plugin' | 'theme'; auto-detected when null.
         'text_domain' => null, // defaults to the host module's own slug.
 
+        // The human-readable Gumroad permalink (the part of the product's
+        // public gum.co/... or gumroad.com/l/... URL), entirely separate
+        // from the product_id passed as register()'s 2nd argument. Purely
+        // cosmetic: used for the license page's "Buy" link and its own URL
+        // slug (see Module::page_slug()). When unset, the Buy link is
+        // hidden (a product_id is not a valid gumroad.com/l/... path) and
+        // the page slug falls back to a short hash of the product_id.
+        'permalink' => null,
+
         // License validity
         'disallow_test_keys' => false,
         'payment_grace' => 7, // days a failed subscription payment stays valid.
@@ -104,11 +113,11 @@ final class Config
      * accepts, produced by the repo's encrypt.php CLI tool or the licensing
      * server's web configurator (App\Services\Shim\ConfigSealer — the two
      * MUST stay byte-for-byte identical). This is obfuscation / tamper
-     * evidence, not real security: the key derives only from the product
-     * permalink, which ships in plaintext inside the plugin itself, so
-     * anyone willing to read this file and write a script can still forge a
-     * blob. What it buys over the old CRC32 scheme is that the payload is no
-     * longer readable at rest (was base64+rot13) and the MAC is fixed-width
+     * evidence, not real security: the key derives only from the product_id
+     * passed to register(), which ships in plaintext inside the plugin
+     * itself, so anyone willing to read this file and write a script can
+     * still forge a blob. What it buys over the old CRC32 scheme is that
+     * the payload is no longer readable at rest (was base64+rot13) and the MAC is fixed-width
      * by construction, so it can't recur the old truncation bug (CRC32
      * rendered as 1-8 hex chars while the decoder always read the last 8,
      * silently corrupting ~6.25% of configs).

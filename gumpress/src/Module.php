@@ -321,9 +321,20 @@ final class Module
         return $base . '?page=' . rawurlencode($this->page_slug());
     }
 
+    /**
+     * `$this->product` is now a Gumroad product_id — an opaque, often
+     * base64-looking string that isn't guaranteed URL/slug-safe (it can
+     * contain characters like `/`, `+`, `=`). The optional `permalink`
+     * config option, when set, keeps this human-readable and stable
+     * (`?page=gumpress-acme-pro`, exactly as before this option existed);
+     * otherwise fall back to a short hash of the product_id — still stable
+     * per-product, always URL-safe, just not pretty until `permalink` is set.
+     */
     public function page_slug(): string
     {
-        return 'gumpress-' . $this->product;
+        $permalink = $this->base_config->get('permalink');
+
+        return 'gumpress-' . ($permalink ?? substr(hash('sha256', $this->product), 0, 16));
     }
 
     public function manage_capability(): string

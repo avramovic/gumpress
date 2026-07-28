@@ -5,13 +5,16 @@
 ```php
 require_once __DIR__ . '/gumpress/gumpress.php';
 
-GumPress::register(__FILE__, 'your-gumroad-permalink', $options);
+GumPress::register(__FILE__, 'your-gumroad-product-id', $options);
 ```
 
 - `__FILE__` must be your plugin's main file, or your theme's `functions.php`.
-- The second argument is the Gumroad **permalink** of your product (the part
-  after `gum.co/` or `yourname.gumroad.com/l/`), used as `product_permalink`
-  when verifying and as the product id everywhere in GumPress.
+- The second argument is your product's Gumroad **product_id** — the opaque,
+  base64-looking string on your Gumroad product's dashboard (**not** the
+  human-readable permalink in its public URL). Gumroad's real verify API
+  requires `product_id`, not `product_permalink`, for any product created on
+  or after **January 9, 2023** — see the `permalink` option below if you
+  still need the permalink for anything.
 - `$options` is either the array below, or a string produced by `encrypt.php`
   (see [Obfuscating your config](#obfuscating-your-config)).
 
@@ -33,6 +36,7 @@ set `type` explicitly only if you have an unusual layout.
 | `offline_grace` | `14` | Days a previously-valid license stays valid while the license server is unreachable. |
 | `offline_policy` | `'grace'` | `'grace'` (above), `'closed'` (never grant offline grace), or `'open'` (always valid when unreachable). |
 | `update_check_url` | `null` | Your self-hosted update server. When unset, no updater is registered. |
+| `permalink` | `null` | Your product's human-readable Gumroad permalink (`gum.co/...` or `yourname.gumroad.com/l/...`) — cosmetic only, never sent for verification. Powers the license page's "Buy" link (hidden without it — a product_id isn't a valid purchase URL) and the license page's own URL slug (`?page=gumpress-{permalink}`; without it, a short hash of your product_id instead). |
 | `lock_config` | `[]` | List of option keys your own `license_check_url` server is never allowed to override, even if it tries — see [Server-controlled overrides](#server-controlled-overrides). |
 | `configurator_url` | GumPress's own configurator | Where the non-production unsealed-config notice links to — see [Obfuscating your config](#obfuscating-your-config). |
 | `plugins_page_link` | `true` | Add a "License" link on the Plugins list row. |
@@ -125,18 +129,18 @@ domain with your compiled-in `license_check_url`), `white_label`,
 range-clamped before it's applied — a malformed override is simply ignored,
 never trusted verbatim.
 
-`license_check_url`, `proxy_fallback`, `type`, `text_domain`, `callbacks`,
-and the config-seal's own `_encrypted` flag can **never** be overridden, no
-matter what a response contains. A response that could rewrite
-`license_check_url` would make one bad deploy permanently unrecoverable —
-and unlike everything else here, it would survive offline in the cached
-payload.
+`license_check_url`, `proxy_fallback`, `type`, `text_domain`, `permalink`,
+`callbacks`, and the config-seal's own `_encrypted` flag can **never** be
+overridden, no matter what a response contains. A response that could
+rewrite `license_check_url` would make one bad deploy permanently
+unrecoverable — and unlike everything else here, it would survive offline
+in the cached payload.
 
 If you don't want your own server to be able to touch a given key at all —
 even one on the whitelist — list it in `lock_config`:
 
 ```php
-GumPress::register(__FILE__, 'your-gumroad-permalink', [
+GumPress::register(__FILE__, 'your-gumroad-product-id', [
     'license_check_url' => 'https://your-licensing-server.example/l/token/verify',
     'lock_config' => ['max_uses'], // this plugin decides its own seat limit, always.
 ]);
@@ -177,7 +181,7 @@ GumPress::extra();
 string you can pass as `$options` instead of a plain array:
 
 ```
-php encrypt.php your-gumroad-permalink '{"max_uses": 0, "update_check_url": "https://example.com/updates"}'
+php encrypt.php your-gumroad-product-id '{"max_uses": 0, "update_check_url": "https://example.com/updates"}'
 ```
 
 The [licensing server's web configurator](https://gumpress.eu/configurator)
@@ -185,7 +189,7 @@ does the same thing without touching a terminal, and can prefill
 `license_check_url`/`update_check_url` for products it knows about.
 
 This is tamper-*evidence*, not real security: the key derives only from your
-Gumroad permalink, which ships in plaintext inside the plugin itself, so
+Gumroad product_id, which ships in plaintext inside the plugin itself, so
 anyone willing to read `gumpress/src/Config.php` and write a script can still
 forge a blob. What it buys you is that the config is no longer readable at
 rest (it's AES-256-CBC + HMAC-SHA256, not base64+rot13) and casual editing —

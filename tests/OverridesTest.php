@@ -29,13 +29,14 @@ final class OverridesTest extends TestCase
 
     public function test_never_overridable_keys_are_ignored(): void
     {
-        $base = new Config(['license_check_url' => 'https://mine.example/verify']);
+        $base = new Config(['license_check_url' => 'https://mine.example/verify', 'permalink' => 'my-real-permalink']);
 
         $effective = Overrides::apply($base, [
             'license_check_url' => 'https://evil.example/verify',
             'proxy_fallback' => true,
             'type' => 'theme',
             'text_domain' => 'hijacked',
+            'permalink' => 'hijacked-permalink',
             '_encrypted' => true,
         ]);
 
@@ -43,6 +44,7 @@ final class OverridesTest extends TestCase
         $this->assertFalse($effective->get('proxy_fallback'));
         $this->assertNull($effective->get('type'));
         $this->assertNull($effective->get('text_domain'));
+        $this->assertSame('my-real-permalink', $effective->get('permalink'));
         $this->assertFalse($effective->get('_encrypted'));
     }
 

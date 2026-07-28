@@ -269,12 +269,16 @@ final class Admin
 
         echo '</table>';
 
+        $permalink = $module->base_config()->get('permalink');
+
         if ($bottom = $module->config()->callback('license_page_bottom')) {
             call_user_func($bottom, $module);
-        } elseif (!$status->is_valid()) {
+        } elseif (!$status->is_valid() && $permalink !== null) {
+            // No Buy link at all without a permalink — product_id is not a
+            // valid gumroad.com/l/... path, so there's nothing safe to link to.
             printf(
                 '<hr /><a class="button button-primary" href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
-                esc_url('https://gumroad.com/l/' . rawurlencode($module->product_id())),
+                esc_url('https://gumroad.com/l/' . rawurlencode($permalink)),
                 esc_html(sprintf(
                     /* translators: %s: plugin or theme name. */
                     __('Buy %s', $domain),

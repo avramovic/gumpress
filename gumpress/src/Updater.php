@@ -69,7 +69,9 @@ final class Updater
 
         $response = wp_remote_get(add_query_arg([
             'license_key' => (string) $module->license_key(),
-            'product_permalink' => $module->product_id(),
+            // See Api.php's post() — product_id, not product_permalink, is
+            // what Gumroad's real API and our own compat routes resolve by.
+            'product_id' => $module->product_id(),
             'site_url' => home_url('/'),
             'wp_version' => get_bloginfo('version'),
             'version' => (string) $module->module_data('Version'),

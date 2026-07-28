@@ -139,7 +139,14 @@ final class Api
             ],
             'body' => [
                 'license_key' => $key,
-                'product_permalink' => $this->module->product_id(),
+                // Gumroad's real API requires product_id (not
+                // product_permalink) for any product created on or after
+                // Jan 9, 2023 — see README.md. The optional `permalink`
+                // config option is cosmetic only (Buy link, page slug) and
+                // deliberately never sent here: the licensing server
+                // resolves by URL (endpoint_token) and real Gumroad only
+                // needs product_id.
+                'product_id' => $this->module->product_id(),
                 'increment_uses_count' => $this->should_increment($key) ? 'true' : 'false',
                 // Per-domain enforcement (seat limits, domain locks) is impossible
                 // without the domain — without this, a licensing server's only

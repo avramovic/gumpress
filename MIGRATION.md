@@ -19,7 +19,13 @@ project README for the full rewrite rationale.
    folder instead.
 
 2. **Update the integration lines** at the top of your main plugin file /
-   theme `functions.php`:
+   theme `functions.php`. Note the second argument's meaning changed within
+   2.0 itself, before any 1.x install would have adopted it: it's now your
+   Gumroad **product_id** (the opaque string on your Gumroad product
+   dashboard), not a permalink — Gumroad's real verify API requires
+   `product_id` for any product created on or after Jan 9, 2023. If you
+   still need the permalink (for the license page's Buy link, for example),
+   pass it as the new `permalink` option instead.
 
    ```php
    // before
@@ -30,7 +36,9 @@ project README for the full rewrite rationale.
 
    // after
    require_once __DIR__ . '/gumpress/gumpress.php';
-   GumPress::register(__FILE__, 'YOUR_GUMROAD_ID');
+   GumPress::register(__FILE__, 'YOUR_GUMROAD_PRODUCT_ID', [
+       'permalink' => 'your-gumroad-permalink', // optional — Buy link + license page URL slug
+   ]);
    ```
 
 3. **Update every call site.** The product ID no longer needs to be repeated:

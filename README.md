@@ -9,6 +9,11 @@ first — this is a clean break, not a compatible upgrade.
 
 - **The product ID is declared once**, at `register()`, and never repeated.
   Every check afterwards is a bare static call: `GumPress::valid()`.
+- **`register()`'s 2nd argument is now your Gumroad product_id**, not the
+  permalink — Gumroad's real verify API requires `product_id` for any
+  product created on or after Jan 9, 2023. The permalink becomes an
+  optional, purely cosmetic `permalink` setting (Buy link, license page URL
+  slug) — see [gumpress/README.md](gumpress/README.md#registration).
 - **Subscriptions are properly supported**: grace periods, cancellation that
   stays valid through the paid period, tiers parsed from Gumroad's
   `variants`, and Gumroad checkout custom fields.
@@ -38,7 +43,7 @@ then add two lines at the very top of that file:
 ```php
 require_once __DIR__ . '/gumpress/gumpress.php';
 
-GumPress::register(__FILE__, 'your-gumroad-permalink', [
+GumPress::register(__FILE__, 'your-gumroad-product-id', [
     'payment_grace' => 7,
 ]);
 ```

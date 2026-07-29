@@ -29,7 +29,6 @@ final class Overrides
         'offline_policy',
         'disallow_test_keys',
         'update_check_url',
-        'white_label',
         'hide_owner_email',
         'hide_custom_fields',
         'suppress_notices',
@@ -101,7 +100,6 @@ final class Overrides
                 return in_array($value, ['grace', 'closed', 'open'], true) ? $value : null;
 
             case 'disallow_test_keys':
-            case 'white_label':
             case 'hide_owner_email':
             case 'hide_custom_fields':
             case 'suppress_notices':

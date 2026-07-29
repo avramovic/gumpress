@@ -64,7 +64,6 @@ final class Config
         'hide_menu_page' => false,
         'suppress_notices' => false,
         'suppress_key_notice' => false,
-        'white_label' => false,
         'hide_owner_email' => false,
         'hide_custom_fields' => false,
         'license_page_title' => null,
@@ -101,6 +100,27 @@ final class Config
         $callback = $this->data['callbacks'][$key] ?? null;
 
         return is_callable($callback) ? $callback : $default;
+    }
+
+    /**
+     * True when the footer credit is waived: the integrator points
+     * license_check_url at a GumPress-run licensing server rather than
+     * Gumroad direct. Deliberately derived rather than configurable —
+     * there is no option to turn the credit off.
+     */
+    public function is_white_label(): bool
+    {
+        $url = (string) $this->get('license_check_url', self::DEFAULT_LICENSE_URL);
+        if ($url === '' || $url === self::DEFAULT_LICENSE_URL) {
+            return false;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            return false;
+        }
+
+        return in_array('gumpress', explode('.', strtolower($host)), true);
     }
 
     public function all(): array

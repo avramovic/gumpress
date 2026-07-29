@@ -49,7 +49,7 @@ final class Admin
             }
         }
 
-        if (!$module->config()->get('white_label')) {
+        if (!$module->base_config()->is_white_label()) {
             add_action('load-' . self::hook_suffix($module), static function () {
                 add_filter('admin_footer_text', [self::class, 'footer_text']);
             });
@@ -89,8 +89,8 @@ final class Admin
     {
         return '<em>' . sprintf(
             /* translators: %s: link to the GumPress project. */
-            __('Protected with %s', 'gumpress'),
-            '<a href="https://gumpress.eu" target="_blank" rel="noopener noreferrer">&hearts; GumPress</a>'
+            __('Protected with &hearts; by %s', 'gumpress'),
+            '<a href="https://gumpress.eu" target="_blank" rel="noopener noreferrer">GumPress</a>'
         ) . '</em>';
     }
 

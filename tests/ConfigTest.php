@@ -38,6 +38,40 @@ final class ConfigTest extends TestCase
         $this->assertSame('fallback', $config->get('does_not_exist', 'fallback'));
     }
 
+    public function test_is_white_label_false_by_default(): void
+    {
+        $this->assertFalse((new Config())->is_white_label());
+    }
+
+    public function test_is_white_label_false_when_explicitly_set_to_the_default_url(): void
+    {
+        $config = new Config(['license_check_url' => Config::DEFAULT_LICENSE_URL]);
+
+        $this->assertFalse($config->is_white_label());
+    }
+
+    /** @dataProvider white_label_url_provider */
+    public function test_is_white_label_derives_from_the_license_check_url(string $url, bool $expected): void
+    {
+        $config = new Config(['license_check_url' => $url]);
+
+        $this->assertSame($expected, $config->is_white_label());
+    }
+
+    public static function white_label_url_provider(): array
+    {
+        return [
+            'gumpress subdomain' => ['https://api.gumpress.eu/verify', true],
+            'gumpress subdomain, mixed case' => ['https://API.GumPress.EU/verify', true],
+            'gumpress label under a bigger host' => ['https://gumpress.example.com/verify', true],
+            'hyphenated lookalike' => ['https://gumpress-mirror.net/verify', false],
+            'prefix lookalike' => ['https://notgumpress.com/verify', false],
+            'unrelated custom host' => ['https://ls.example.com/verify', false],
+            'not a url' => ['not a url', false],
+            'empty string' => ['', false],
+        ];
+    }
+
     public function test_callback_returns_default_when_not_callable(): void
     {
         $config = new Config(['callbacks' => ['license_page_top' => 'not callable and not a function']]);

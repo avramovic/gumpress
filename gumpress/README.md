@@ -43,7 +43,6 @@ set `type` explicitly only if you have an unusual layout.
 | `hide_menu_page` | `false` | Don't show a Settings/Appearance menu item for the license page. The page stays reachable at its URL — useful with several GumPress modules on one site, where `plugins_page_link` already gives each one a "License" link on its Plugins list row. |
 | `suppress_notices` | `false` | Disable all admin notices. |
 | `suppress_key_notice` | `false` | Disable only the "no key entered yet" notice. |
-| `white_label` | `false` | Remove the "Protected with GumPress" admin footer credit. |
 | `hide_owner_email` | `false` | Don't show the purchaser's email on the license page. |
 | `hide_custom_fields` | `false` | Don't show Gumroad checkout custom fields on the license page. |
 | `license_page_title` | module name + "License" | License settings page `<title>`. |
@@ -122,12 +121,12 @@ still sees an accurate reason instead of a bare "unreachable":
 Only a fixed whitelist of keys can ever be pushed this way: `max_uses`,
 `max_uses_policy`, `payment_grace`, `offline_grace`, `offline_policy`,
 `disallow_test_keys`, `update_check_url` (only when it shares a registrable
-domain with your compiled-in `license_check_url`), `white_label`,
-`hide_owner_email`, `hide_custom_fields`, `suppress_notices`,
-`suppress_key_notice`, `plugins_page_link`, `hide_menu_page`,
-`license_page_title`, `license_page_menu`. Every value is type-checked and
-range-clamped before it's applied — a malformed override is simply ignored,
-never trusted verbatim.
+domain with your compiled-in `license_check_url`), `hide_owner_email`,
+`hide_custom_fields`, `suppress_notices`, `suppress_key_notice`,
+`plugins_page_link`, `hide_menu_page`, `license_page_title`,
+`license_page_menu`. Every value is type-checked and range-clamped before
+it's applied — a malformed override is simply ignored, never trusted
+verbatim.
 
 `license_check_url`, `proxy_fallback`, `type`, `text_domain`, `permalink`,
 `callbacks`, and the config-seal's own `_encrypted` flag can **never** be

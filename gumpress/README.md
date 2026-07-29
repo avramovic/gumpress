@@ -198,10 +198,13 @@ editor — no longer works.
 
 **If you skip this**, GumPress will show an admin notice with a link to the
 configurator, but *only* outside of production
-(`wp_get_environment_type()`, local/staging hosts, WP-CLI). A real
-customer's site never sees it — it's a build-time reminder aimed at you, the
-developer, not a runtime warning aimed at your customers, and it fires
-regardless of `suppress_notices` for exactly that reason.
+(`wp_get_environment_type()`, local/staging hosts, WP-CLI), and only once
+you've actually set an option — a bare `register($file, $product)` with no
+`$options` (or one that only restates a default) has nothing to seal, so it
+stays quiet. A real customer's site never sees it either way — it's a
+build-time reminder aimed at you, the developer, not a runtime warning aimed
+at your customers, and it fires regardless of `suppress_notices` for exactly
+that reason.
 
 ## More than one licensed product on the same site
 

@@ -26,6 +26,11 @@ final class Engine
             } else {
                 $decoded['_encrypted'] = true;
             }
+            // A tamper-check failure falls through to $decoded = [] above,
+            // i.e. an all-defaults config — is_default() below already
+            // keeps that quiet, so this path only ever shows the one
+            // "failed its tamper check" notice, not that plus an unrelated
+            // unsealed-config warning.
             $options = $decoded;
         }
 
@@ -45,10 +50,16 @@ final class Engine
      * option exists so a developer can keep a customer's dashboard clean,
      * and letting it silence a build warning aimed at the developer would
      * hide the one thing they need to see.
+     *
+     * Also silent while the config is still all defaults: register($file,
+     * $product) with no options (or options that just restate a default,
+     * like the quick-start's payment_grace => 7) ships nothing worth
+     * hiding, so there's nothing for sealing to protect. The warning should
+     * only show up once there's an actual secret to seal.
      */
     public static function maybe_warn_unsealed_config(Config $config, string $product): void
     {
-        if ($config->get('_encrypted') || !Env::is_non_production()) {
+        if ($config->get('_encrypted') || $config->is_default() || !Env::is_non_production()) {
             return;
         }
 

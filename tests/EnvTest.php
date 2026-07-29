@@ -127,4 +127,22 @@ final class EnvTest extends TestCase
             Notices::queued_for_tests()[0]['content']
         );
     }
+
+    public function test_default_config_stays_silent_outside_production(): void
+    {
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        Engine::maybe_warn_unsealed_config(new Config([]), 'acme-plugin');
+
+        $this->assertCount(0, Notices::queued_for_tests());
+    }
+
+    public function test_config_matching_defaults_stays_silent(): void
+    {
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        Engine::maybe_warn_unsealed_config(new Config(['payment_grace' => 7]), 'acme-plugin');
+
+        $this->assertCount(0, Notices::queued_for_tests());
+    }
 }

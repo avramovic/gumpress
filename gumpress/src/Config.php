@@ -109,6 +109,15 @@ final class Config
     }
 
     /**
+     * True when nothing was passed to register() beyond GumPress's own
+     * defaults — the only case where an unsealed config has nothing to hide.
+     */
+    public function is_default(): bool
+    {
+        return $this->data == self::DEFAULTS;
+    }
+
+    /**
      * Decodes the "gp1" sealed-string form of $options that GumPress::register()
      * accepts, produced by the repo's encrypt.php CLI tool or the licensing
      * server's web configurator (App\Services\Shim\ConfigSealer — the two

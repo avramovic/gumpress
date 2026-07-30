@@ -3,7 +3,18 @@
 declare(strict_types=1);
 
 /**
- * Build helper invoked by build.sh. Produces two artifacts under dist/:
+ * The whole build. Run it with `composer build`, or directly:
+ *
+ *   php bin/build.php [version] [ns-suffix] [dist-dir]
+ *
+ * All three are optional and default to VERSION / `v` + that with dots as
+ * underscores / `dist`. They exist so tests/BuildTest.php can build a
+ * throwaway copy under its own version and directory.
+ *
+ * Deliberately pure PHP, no shell: this replaced a build.sh whose find /
+ * xargs / rm -rf left Windows contributors unable to build at all.
+ *
+ * Produces two artifacts:
  *
  *   dist/gumpress/      A copy of the gumpress/ drop-in folder, with the
  *                        dev-time `GumPress\V2` namespace rewritten to a
@@ -17,25 +28,99 @@ declare(strict_types=1);
  *                        anyone who prefers v1's one-file shape.
  */
 
-// Guarded because this script rrmdir()s $distModule: with $distRelative
-// missing it resolved to $root . '//gumpress' — the SOURCE tree — so a bare
-// `php bin/build.php` silently deleted gumpress/ before failing on the next
-// type error. Run it through ./build.sh, which supplies all three.
-if ($argc < 4) {
-    fwrite(STDERR, "Usage: php bin/build.php <version> <ns-suffix> <dist-dir>\n");
-    fwrite(STDERR, "Normally invoked via ./build.sh, which derives the first two from VERSION.\n");
-    exit(1);
-}
-
-[, $version, $nsSuffix, $distRelative] = $argv;
+require __DIR__ . '/lint.php';
 
 $root = dirname(__DIR__);
 $srcRoot = $root . '/gumpress';
+
+$version = $argv[1] ?? '';
+if ($version === '') {
+    // Matches build.sh's `tr -d '[:space:]'` — strips all whitespace, not
+    // just the trailing newline.
+    $version = preg_replace('/\s+/', '', (string) file_get_contents($root . '/VERSION'));
+}
+
+$nsSuffix = $argv[2] ?? '';
+if ($nsSuffix === '') {
+    $nsSuffix = 'v' . str_replace('.', '_', $version);
+}
+
+$distRelative = $argv[3] ?? 'dist';
+
+if ($version === '' || $nsSuffix === '') {
+    fwrite(STDERR, "ERROR: could not determine a version to build.\n");
+    exit(1);
+}
+
 $distRoot = $root . '/' . $distRelative;
 $distModule = $distRoot . '/gumpress';
 
-if ($distRelative === '' || realpath($distModule) === realpath($srcRoot)) {
-    fwrite(STDERR, "ERROR: refusing to build — <dist-dir> resolves onto the source tree.\n");
+/**
+ * Collapses `.` and `..` segments and normalises separators, WITHOUT
+ * realpath() — which returns false for a directory that doesn't exist yet,
+ * and so would silently defeat every check below on a first build.
+ *
+ * Windows drive letters end up prefixed with `/` ("C:/x" -> "/C:/x"). That's
+ * not a real path, but both sides of every comparison go through this same
+ * function, so it doesn't affect the result.
+ */
+function gumpress_canonical(string $path): string
+{
+    $path = str_replace('\\', '/', $path);
+    $absolute = str_starts_with($path, '/') || preg_match('#^[A-Za-z]:/#', $path) === 1;
+
+    $segments = [];
+    foreach (explode('/', $path) as $segment) {
+        if ($segment === '' || $segment === '.') {
+            continue;
+        }
+        if ($segment === '..') {
+            array_pop($segments);
+
+            continue;
+        }
+        $segments[] = $segment;
+    }
+
+    return ($absolute ? '/' : '') . implode('/', $segments);
+}
+
+/**
+ * This script recursively deletes $distRoot, and $distRelative now has a
+ * default — precisely the shape that once resolved onto the source tree and
+ * deleted gumpress/ outright. The rule is therefore positive rather than a
+ * blocklist: the target must sit strictly INSIDE the repo, and must not
+ * touch the source tree in either direction. Anything else is refused.
+ *
+ * An earlier version of this guard compared unresolved strings and let `.`
+ * through, which would have deleted the repo root.
+ */
+$canonicalDist = gumpress_canonical($distRoot);
+$canonicalSrc = gumpress_canonical($srcRoot);
+$canonicalRoot = gumpress_canonical($root);
+
+$insideRepo = str_starts_with($canonicalDist . '/', $canonicalRoot . '/')
+    && $canonicalDist !== $canonicalRoot;
+
+$clearOfSource = $canonicalDist !== $canonicalSrc
+    && !str_starts_with($canonicalDist . '/', $canonicalSrc . '/')
+    && !str_starts_with($canonicalSrc . '/', $canonicalDist . '/');
+
+$isAbsoluteInput = str_starts_with(str_replace('\\', '/', $distRelative), '/')
+    || preg_match('#^[A-Za-z]:#', $distRelative) === 1;
+
+if ($distRelative === '' || $isAbsoluteInput || !$insideRepo || !$clearOfSource) {
+    fwrite(STDERR, "ERROR: refusing to build — <dist-dir> must be a relative path inside the\n");
+    fwrite(STDERR, "       repository that does not overlap the repo root or gumpress/.\n");
+    fwrite(STDERR, "       Got: '{$distRelative}'\n");
+    exit(1);
+}
+
+fwrite(STDOUT, "Building GumPress {$version} (namespace suffix: GumPress\\{$nsSuffix})\n");
+
+fwrite(STDOUT, "==> Linting source\n");
+if (gumpress_lint_paths([$srcRoot]) > 0) {
+    fwrite(STDERR, "ERROR: source failed to lint; not building.\n");
     exit(1);
 }
 
@@ -106,7 +191,13 @@ function gumpress_copy_rewriting(string $from, string $to, string $nsSuffix): vo
 
 // --- 1. Drop-in folder, namespace rewritten. ---
 
-gumpress_rrmdir($distModule);
+// Clears the whole dist dir, not just dist/gumpress — build.sh's `rm -rf
+// dist` is what used to guarantee that, and without it a renamed or
+// removed artifact would linger from an earlier build.
+fwrite(STDOUT, "==> Preparing {$distRelative}/\n");
+gumpress_rrmdir($distRoot);
+mkdir($distRoot, 0777, true);
+
 gumpress_copy_rewriting($srcRoot, $distModule, $nsSuffix);
 
 $bootstrap_path = $distModule . '/gumpress.php';
@@ -120,6 +211,7 @@ $order = [
     'src/Data.php',
     'src/Notices.php',
     'src/Config.php',
+    'src/Vault.php',
     'src/Env.php',
     'src/License.php',
     'src/Status.php',
@@ -173,9 +265,18 @@ $facade = str_replace('GumPress\\V2\\', "GumPress\\{$nsSuffix}\\", $facade);
 
 $out .= "namespace {\n\n" . trim($facade) . "\n\n}\n";
 
-if (!is_dir($distRoot)) {
-    mkdir($distRoot, 0777, true);
-}
 file_put_contents($distRoot . '/GumPress.php', $out);
 
 fwrite(STDOUT, "Wrote {$distModule} and {$distRoot}/GumPress.php\n");
+
+// The concatenation above rewrites namespaces and strips headers with
+// regexes, so linting the result is a real guard, not a formality.
+fwrite(STDOUT, "==> Linting build output\n");
+if (gumpress_lint_paths([$distRoot]) > 0) {
+    fwrite(STDERR, "ERROR: the generated build does not parse.\n");
+    exit(1);
+}
+
+fwrite(STDOUT, "\nDone.\n");
+fwrite(STDOUT, "  Drop-in folder: {$distRelative}/gumpress/\n");
+fwrite(STDOUT, "  Single file:    {$distRelative}/GumPress.php\n");

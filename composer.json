@@ -19,8 +19,8 @@
     },
     "scripts": {
         "test": "phpunit",
-        "lint": "find gumpress -name '*.php' -print0 | xargs -0 -n1 php -l",
+        "lint": "php bin/lint.php gumpress",
         "stan": "phpstan analyse",
-        "build": "./build.sh"
+        "build": "php bin/build.php"
     }
 }

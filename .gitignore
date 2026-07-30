@@ -1,6 +1,7 @@
 /vendor/
 /composer.lock
 /dist/
+/dist-buildtest-tmp/
 /.phpunit.result.cache
 /.phpunit.cache/
 .DS_Store

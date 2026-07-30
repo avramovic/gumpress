@@ -31,7 +31,7 @@ first — this is a clean break, not a compatible upgrade.
 - **Distributed as a `gumpress/` folder**, not a single file — several
   plugins/themes on one site can each bundle their own copy, at different
   versions, without conflicting. A single-file build is still produced for
-  anyone who prefers that shape (`dist/GumPress.php` after `build.sh`).
+  anyone who prefers that shape (`dist/GumPress.php` after `composer build`).
 - **PHP 8.0+.**
 - A long list of correctness and security fixes — see below.
 
@@ -92,10 +92,9 @@ reference.
 gumpress/           The drop-in library. Copy this folder into your plugin/theme.
 tests/              PHPUnit suite + hand-rolled WP stubs — no WordPress or
                     Gumroad account required to run it.
-bin/build.php       Used by build.sh to produce the dist/ artifacts.
-build.sh            Lints, then builds dist/gumpress/ and dist/GumPress.php.
-                    Pass --obfuscate to also produce an obfuscated build
-                    (requires yakpro-po on PATH and a sibling phpz checkout).
+bin/build.php       Lints, then builds both dist/ artifacts. Run it with
+                    `composer build`.
+bin/lint.php        Portable `php -l` over a directory tree.
 encrypt.php         CLI tool to obfuscate a config array for GumPress::register().
 ```
 
@@ -103,11 +102,14 @@ encrypt.php         CLI tool to obfuscate a config array for GumPress::register(
 
 ```
 composer install
-composer test    # phpunit
-composer lint    # php -l on every source file
+composer test     # phpunit
+composer lint     # php -l on every source file
 composer stan     # phpstan, WordPress-aware stubs
-./build.sh        # produce dist/gumpress/ and dist/GumPress.php
+composer build    # produce dist/gumpress/ and dist/GumPress.php
 ```
+
+Everything above is plain PHP — no shell script, so it all works on Windows
+too.
 
 ## License
 

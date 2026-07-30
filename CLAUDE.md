@@ -22,10 +22,12 @@ composer stan     # phpstan level 5 with WordPress stubs, gumpress/src only
 vendor/bin/phpunit --filter TestName    # run a single test
 vendor/bin/phpunit tests/ValidatorTest.php
 
-./build.sh              # produce dist/gumpress/ (namespaced drop-in) and dist/GumPress.php (single-file)
-./build.sh --obfuscate   # also produce dist-obfuscated/GumPress.php (requires yakpro-po + sibling ../phpz checkout)
+composer build    # produce dist/gumpress/ (namespaced drop-in) and dist/GumPress.php (single-file)
 php encrypt.php <gumroad-product-id> '<json-config>'   # produce a sealed "gp1" config blob for register()
 ```
+
+Every command above is plain PHP. There is deliberately no shell script in this
+repo — `build.sh` was removed so Windows contributors can build and lint too.
 
 There is no build step required to use the library from source — `dist/` is only for
 distributing to end users. When testing changes, run against `gumpress/`, not `dist/`.
@@ -36,7 +38,9 @@ distributing to end users. When testing changes, run against `gumpress/`, not `d
 rewrites that namespace to a version-suffixed one (`GumPress\v2_0_0`) when producing `dist/`,
 and also concatenates all of `src/` into the single-file `dist/GumPress.php` in a fixed
 require order (see the `$order` array in `bin/build.php`) — if you add a new class, add it
-there too, in dependency order.
+there too, in dependency order, **and** to `gumpress/src/load.php`. Both lists are
+hand-maintained and a class missing from either simply isn't there at runtime;
+`tests/SourceManifestTest.php` enforces that they cover every file under `src/`.
 
 **Multi-copy coexistence is the central design constraint.** Several plugins/themes on one
 WordPress site can each bundle their own copy of GumPress, at different versions. This shapes

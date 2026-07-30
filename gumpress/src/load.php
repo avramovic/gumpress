@@ -19,6 +19,7 @@ if (class_exists(__NAMESPACE__ . '\\Engine', false)) {
 require __DIR__ . '/Data.php';
 require __DIR__ . '/Notices.php';
 require __DIR__ . '/Config.php';
+require __DIR__ . '/Vault.php';
 require __DIR__ . '/Env.php';
 require __DIR__ . '/License.php';
 require __DIR__ . '/Status.php';

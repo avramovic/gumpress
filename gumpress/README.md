@@ -15,7 +15,7 @@ GumPress::register(__FILE__, 'your-gumroad-product-id', $options);
   requires `product_id`, not `product_permalink`, for any product created on
   or after **January 9, 2023** — see the `permalink` option below if you
   still need the permalink for anything.
-- `$options` is either the array below, or a string produced by `encrypt.php`
+- `$options` is either the array below, or a string produced by `bin/encrypt.php`
   (see [Obfuscating your config](#obfuscating-your-config)).
 
 Type (`plugin` vs `theme`) is auto-detected from where `__FILE__` lives;
@@ -231,12 +231,14 @@ GumPress::extra();
 
 ## Obfuscating your config
 
-`encrypt.php` at the repo root turns a config array into a sealed `gp1`
-string you can pass as `$options` instead of a plain array:
+`bin/encrypt.php` in the GumPress repo turns a config array into a sealed
+`gp1` string you can pass as `$options` instead of a plain array:
 
 ```
-php encrypt.php your-gumroad-product-id '{"max_uses": 0, "update_check_url": "https://example.com/updates"}'
+composer encrypt your-gumroad-product-id '{"max_uses": 0, "update_check_url": "https://example.com/updates"}'
 ```
+
+(or `php bin/encrypt.php ...` directly, without Composer)
 
 The [licensing server's web configurator](https://gumpress.eu/configurator)
 does the same thing without touching a terminal, and can prefill

@@ -121,7 +121,7 @@ final class ConfigTest extends TestCase
         $product = 'acme-plugin';
         $original = ['max_uses' => 2, 'grace_period' => 5];
 
-        $blob = self::seal($original, $product);
+        $blob = \gumpress_seal($original, $product);
 
         $decoded = Config::decode_encrypted($blob, $product);
 
@@ -131,7 +131,7 @@ final class ConfigTest extends TestCase
     public function test_decode_encrypted_rejects_tampered_payload(): void
     {
         $product = 'acme-plugin';
-        $blob = self::seal(['max_uses' => 1], $product);
+        $blob = \gumpress_seal(['max_uses' => 1], $product);
 
         // Flip the MAC so it no longer matches.
         $tampered = substr($blob, 0, -16) . str_repeat('0', 16);
@@ -141,7 +141,7 @@ final class ConfigTest extends TestCase
 
     public function test_decode_encrypted_rejects_wrong_product(): void
     {
-        $blob = self::seal(['max_uses' => 1], 'acme-plugin');
+        $blob = \gumpress_seal(['max_uses' => 1], 'acme-plugin');
 
         $this->assertNull(Config::decode_encrypted($blob, 'a-different-product'));
     }
@@ -163,6 +163,9 @@ final class ConfigTest extends TestCase
      * ~6.25% of generated configs. HMAC-SHA256 truncated to a fixed 16 hex
      * characters can't recur that bug by construction; assert it across a
      * wide spread of configs and product ids, not just one lucky case.
+     *
+     * Runs against bin/encrypt.php's actual gumpress_seal(), so this also
+     * pins the CLI's output format, not a hand-maintained lookalike of it.
      */
     public function test_seal_round_trips_across_many_random_configs(): void
     {
@@ -170,26 +173,10 @@ final class ConfigTest extends TestCase
             $product = 'product-' . $i;
             $config = ['n' => $i, 'flag' => ($i % 2 === 0), 'label' => 'label-' . $i];
 
-            $blob = self::seal($config, $product);
+            $blob = \gumpress_seal($config, $product);
 
             $this->assertSame(16, strlen(substr($blob, -16)), "MAC was not 16 chars at iteration {$i}");
             $this->assertSame($config, Config::decode_encrypted($blob, $product), "round-trip failed at iteration {$i}");
         }
-    }
-
-    /** Mirrors encrypt.php's own "gp1" encoding, used here purely to build test fixtures. */
-    private static function seal(array $config, string $product): string
-    {
-        $json = json_encode($config);
-        $deflated = gzdeflate($json, 9);
-
-        $key = hash('sha256', 'gumpress|' . $product, true);
-        $iv = substr(hash('sha256', 'iv|' . $product, true), 0, 16);
-
-        $ciphertext = openssl_encrypt($deflated, 'aes-256-cbc', $key, OPENSSL_RAW_DATA, $iv);
-        $payload = rtrim(strtr(base64_encode($ciphertext), '+/', '-_'), '=');
-        $mac = substr(hash_hmac('sha256', $payload, $key), 0, 16);
-
-        return 'gp1' . $payload . $mac;
     }
 }

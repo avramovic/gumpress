@@ -73,7 +73,7 @@ final class GumPress
 
     /**
      * @param array|string $options An options array, or an encrypted string
-     *                               produced by this repo's encrypt.php tool.
+     *                               produced by this repo's bin/encrypt.php tool.
      * @return object Module|NullModule
      */
     public static function register(string $file, string $product, $options = [])

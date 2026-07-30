@@ -19,8 +19,9 @@
     },
     "scripts": {
         "test": "phpunit",
-        "lint": "php bin/lint.php gumpress",
+        "lint": "php bin/lint.php gumpress bin",
         "stan": "phpstan analyse",
-        "build": "php bin/build.php"
+        "build": "php bin/build.php",
+        "encrypt": "php bin/encrypt.php"
     }
 }

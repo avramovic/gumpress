@@ -16,14 +16,14 @@ changes from 1.x (this matters when reading old code/issues: option names, defau
 ```
 composer install
 composer test    # phpunit — tests/, bootstrap.php loads hand-rolled WP stubs, no real WordPress needed
-composer lint     # php -l on every file under gumpress/
+composer lint     # php -l on every file under gumpress/ and bin/
 composer stan     # phpstan level 5 with WordPress stubs, gumpress/src only
 
 vendor/bin/phpunit --filter TestName    # run a single test
 vendor/bin/phpunit tests/ValidatorTest.php
 
 composer build    # produce dist/gumpress/ (namespaced drop-in) and dist/GumPress.php (single-file)
-php encrypt.php <gumroad-product-id> '<json-config>'   # produce a sealed "gp1" config blob for register()
+composer encrypt <gumroad-product-id> '<json-config>'   # produce a sealed "gp1" config blob for register()
 ```
 
 Every command above is plain PHP. There is deliberately no shell script in this
@@ -124,7 +124,6 @@ anything that needs a real `Module` instance is presently outside unit-test cove
 `register()` is the Gumroad **product_id** (opaque dashboard string), not the permalink —
 Gumroad's real verify API requires `product_id` for products created on/after Jan 9, 2023.
 The permalink is now a separate, purely cosmetic `permalink` option (Buy link + license page
-URL slug only) and is never sent to any verify/update endpoint. `encrypt.php`'s CLI help text
-still calls its first argument "permalink" — that's stale wording from before this change;
-the value it actually seals under is the product_id, and it must match whatever `register()`
-is called with for `Config::decode_encrypted()`'s key derivation to succeed.
+URL slug only) and is never sent to any verify/update endpoint. `bin/encrypt.php` seals under
+the product_id, and it must match whatever `register()` is called with for
+`Config::decode_encrypted()`'s key derivation to succeed.

@@ -170,7 +170,7 @@ final class Config
 
     /**
      * Decodes the "gp1" sealed-string form of $options that GumPress::register()
-     * accepts, produced by the repo's encrypt.php CLI tool or the licensing
+     * accepts, produced by the repo's bin/encrypt.php CLI tool or the licensing
      * server's web configurator (App\Services\Shim\ConfigSealer — the two
      * MUST stay byte-for-byte identical). This is obfuscation / tamper
      * evidence, not real security: the key derives only from the product_id

@@ -94,8 +94,9 @@ tests/              PHPUnit suite + hand-rolled WP stubs — no WordPress or
                     Gumroad account required to run it.
 bin/build.php       Lints, then builds both dist/ artifacts. Run it with
                     `composer build`.
+bin/encrypt.php     Seals a config array into a "gp1" blob for
+                    GumPress::register(). Run it with `composer encrypt`.
 bin/lint.php        Portable `php -l` over a directory tree.
-encrypt.php         CLI tool to obfuscate a config array for GumPress::register().
 ```
 
 ## Development
@@ -103,9 +104,10 @@ encrypt.php         CLI tool to obfuscate a config array for GumPress::register(
 ```
 composer install
 composer test     # phpunit
-composer lint     # php -l on every source file
+composer lint     # php -l on every file under gumpress/ and bin/
 composer stan     # phpstan, WordPress-aware stubs
 composer build    # produce dist/gumpress/ and dist/GumPress.php
+composer encrypt <product-id> '<json-config>'   # seal a config blob for register()
 ```
 
 Everything above is plain PHP — no shell script, so it all works on Windows

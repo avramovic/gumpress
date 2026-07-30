@@ -64,7 +64,7 @@ project README for the full rewrite rationale.
    | — | `lock_config` / `configurator_url` (new — see [Server-controlled overrides](gumpress/README.md#server-controlled-overrides)) |
    | `deny_update_without_license` (declared, never actually read by anything) | removed outright |
 
-5. **If you obfuscated your config with `encrypt.php`**, re-run it. The
+5. **If you obfuscated your config with `encrypt.php`** (now `bin/encrypt.php`), re-run it. The
    sealed format changed from CRC32 (readable at rest, and prone to a
    truncation bug that silently corrupted about 1 in 16 generated configs)
    to AES-256-CBC + HMAC-SHA256 (`gp1`). There is no compatibility path — a

@@ -20,3 +20,10 @@ require __DIR__ . '/../gumpress/src/Engine.php';
 // stay out: they need the full admin/hook API and are still uncovered.
 require __DIR__ . '/../gumpress/src/Api.php';
 require __DIR__ . '/../gumpress/src/Module.php';
+
+// The sealing half of the "gp1" codec lives in the CLI tool, not in src/ —
+// Config is decode-only. Requiring it here lets ConfigTest round-trip the
+// real sealer instead of a copy. Its direct-run guard keeps the CLI inert:
+// this require happens from inside a method, so the global $argv isn't even
+// in scope, and the guard short-circuits before realpath() ever runs.
+require __DIR__ . '/../bin/encrypt.php';

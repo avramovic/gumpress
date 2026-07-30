@@ -59,6 +59,13 @@ if (!function_exists('esc_html')) {
     }
 }
 
+if (!function_exists('esc_url')) {
+    function esc_url($url)
+    {
+        return htmlspecialchars((string) $url, ENT_QUOTES);
+    }
+}
+
 if (!function_exists('add_action')) {
     function add_action(...$args)
     {

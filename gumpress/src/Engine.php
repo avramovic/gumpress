@@ -64,13 +64,41 @@ final class Engine
         }
 
         $configurator_url = (string) ($config->get('configurator_url') ?? Config::DEFAULT_CONFIGURATOR_URL);
+        $link = self::configurator_link($configurator_url, $product, $config);
 
-        Notices::queue(sprintf(
+        Notices::queue_html(sprintf(
             'GumPress: "%s" is running with an unsealed (plain-array) configuration outside of '
             . 'production. Anyone with file or hosting access can silently edit its settings — including '
-            . 'which server it reports to — with a text editor. Seal it before shipping: %s',
-            $product,
-            $configurator_url
+            . 'which server it reports to — with a text editor. <a href="%s" target="_blank">Seal it before shipping</a>.',
+            esc_html($product),
+            esc_url($link)
         ), 'warning');
+    }
+
+    /**
+     * The unsealed-config notice's link, carrying every non-default option
+     * over as a query parameter (see Config::non_defaults()) so the
+     * configurator loads pre-filled instead of blank. Booleans become "1"/"0"
+     * — the only shape ConfigConfigurator's Livewire #[Url] bindings expect
+     * for a bool-typed property; arrays (there are none left in
+     * non_defaults() once 'lock_config' is excluded, but stay defensive)
+     * are skipped rather than mangled into query-string bracket notation
+     * the configurator doesn't parse.
+     */
+    private static function configurator_link(string $configurator_url, string $product, Config $config): string
+    {
+        $params = ['product_id' => $product];
+
+        foreach ($config->non_defaults() as $key => $value) {
+            if (is_array($value)) {
+                continue;
+            }
+
+            $params[$key] = is_bool($value) ? ($value ? '1' : '0') : $value;
+        }
+
+        $separator = str_contains($configurator_url, '?') ? '&' : '?';
+
+        return $configurator_url . $separator . http_build_query($params);
     }
 }

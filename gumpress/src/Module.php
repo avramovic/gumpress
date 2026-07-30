@@ -311,7 +311,7 @@ final class Module
     public function seat_over_limit(): bool
     {
         return Validator::seat_over_limit($this->license(), $this->config())
-            && $this->config()->get('max_uses_policy', 'warn') === 'warn';
+            && $this->config()->get('max_uses_policy', 'block') === 'warn';
     }
 
     public function license_page_link(): string

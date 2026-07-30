@@ -68,7 +68,7 @@ final class Validator
         }
 
         $max = (int) $config->get('max_uses', 0);
-        if ($max > 0 && $license->uses() > $max && $config->get('max_uses_policy', 'warn') === 'block') {
+        if ($max > 0 && $license->uses() > $max && $config->get('max_uses_policy', 'block') === 'block') {
             return new Status(Status::SEAT_LIMIT, ['uses' => $license->uses(), 'max' => $max]);
         }
 

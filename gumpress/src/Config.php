@@ -38,7 +38,7 @@ final class Config
         'payment_grace' => 7, // days a failed subscription payment stays valid.
         'max_uses' => 0, // 0 disables seat limiting entirely (see README: Gumroad's
                          // `uses` counts verifications, not seats, and can't be decremented).
-        'max_uses_policy' => 'warn', // 'warn' (show a notice) | 'block' (invalidate).
+        'max_uses_policy' => 'block', // 'block' (invalidate) | 'warn' (show a notice).
 
         // Network / caching / offline behaviour
         'license_check_url' => self::DEFAULT_LICENSE_URL,
@@ -126,6 +126,37 @@ final class Config
     public function all(): array
     {
         return $this->data;
+    }
+
+    /**
+     * Every option that differs from DEFAULTS — what
+     * Engine::maybe_warn_unsealed_config() links into the configurator with,
+     * so a developer who already has a working plain-array config gets it
+     * pre-filled there instead of retyping everything. Excludes keys that
+     * either can't survive a query string ('callbacks' is a PHP closure map)
+     * or wouldn't help reproduce anything ('lock_config' is a list of keys
+     * to protect, not a value to carry over; 'configurator_url' pointing
+     * back at itself would be circular; '_encrypted'/'type'/'text_domain'
+     * aren't developer-facing options at all).
+     */
+    public function non_defaults(): array
+    {
+        $excluded = ['callbacks', 'lock_config', 'configurator_url', '_encrypted', 'type', 'text_domain'];
+        $diff = [];
+
+        foreach ($this->data as $key => $value) {
+            if (in_array($key, $excluded, true)) {
+                continue;
+            }
+
+            if ($value === (self::DEFAULTS[$key] ?? null)) {
+                continue;
+            }
+
+            $diff[$key] = $value;
+        }
+
+        return $diff;
     }
 
     /**

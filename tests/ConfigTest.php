@@ -14,7 +14,7 @@ final class ConfigTest extends TestCase
         $config = new Config();
 
         $this->assertSame(0, $config->get('max_uses'));
-        $this->assertSame('warn', $config->get('max_uses_policy'));
+        $this->assertSame('block', $config->get('max_uses_policy'));
         $this->assertSame(7, $config->get('payment_grace'));
         $this->assertSame(14, $config->get('offline_grace'));
         $this->assertSame(Config::DEFAULT_LICENSE_URL, $config->get('license_check_url'));
@@ -28,7 +28,7 @@ final class ConfigTest extends TestCase
         $this->assertSame(5, $config->get('max_uses'));
         $this->assertSame(3, $config->get('payment_grace'));
         // untouched defaults survive the merge.
-        $this->assertSame('warn', $config->get('max_uses_policy'));
+        $this->assertSame('block', $config->get('max_uses_policy'));
     }
 
     public function test_get_returns_default_for_unknown_key(): void
@@ -70,6 +70,35 @@ final class ConfigTest extends TestCase
             'not a url' => ['not a url', false],
             'empty string' => ['', false],
         ];
+    }
+
+    public function test_non_defaults_is_empty_for_an_all_default_config(): void
+    {
+        $config = new Config();
+
+        $this->assertSame([], $config->non_defaults());
+    }
+
+    public function test_non_defaults_only_includes_changed_options(): void
+    {
+        $config = new Config(['max_uses' => 5, 'payment_grace' => 3, 'offline_grace' => 14]);
+
+        $this->assertSame(['payment_grace' => 3, 'max_uses' => 5], $config->non_defaults());
+    }
+
+    public function test_non_defaults_excludes_non_reproducible_keys(): void
+    {
+        $config = new Config([
+            'callbacks' => ['license_page_top' => static fn () => 'x'],
+            'lock_config' => ['max_uses'],
+            'configurator_url' => 'https://example.test/configurator',
+            '_encrypted' => true,
+            'type' => 'plugin',
+            'text_domain' => 'acme',
+            'max_uses' => 5,
+        ]);
+
+        $this->assertSame(['max_uses' => 5], $config->non_defaults());
     }
 
     public function test_callback_returns_default_when_not_callable(): void

@@ -145,4 +145,44 @@ final class EnvTest extends TestCase
 
         $this->assertCount(0, Notices::queued_for_tests());
     }
+
+    /**
+     * The notice's link carries the product id and every non-default option
+     * over as a query parameter, so following it from the WP admin lands on
+     * the configurator pre-filled instead of blank — see
+     * Config::non_defaults().
+     */
+    public function test_unsealed_config_notice_link_carries_the_product_id_and_non_defaults(): void
+    {
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        Engine::maybe_warn_unsealed_config(
+            new Config(['max_uses' => 5, 'disallow_test_keys' => true, 'payment_grace' => 7]),
+            'acme-plugin'
+        );
+
+        $content = Notices::queued_for_tests()[0]['content'];
+
+        $this->assertStringContainsString('<a href="', $content);
+        $this->assertStringContainsString('product_id=acme-plugin', $content);
+        $this->assertStringContainsString('max_uses=5', $content);
+        $this->assertStringContainsString('disallow_test_keys=1', $content);
+        // payment_grace restates its own default (7) — must NOT appear.
+        $this->assertStringNotContainsString('payment_grace=', $content);
+    }
+
+    public function test_unsealed_config_notice_link_omits_array_valued_options(): void
+    {
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        Engine::maybe_warn_unsealed_config(
+            new Config(['max_uses' => 5, 'lock_config' => ['max_uses']]),
+            'acme-plugin'
+        );
+
+        $content = Notices::queued_for_tests()[0]['content'];
+
+        $this->assertStringContainsString('max_uses=5', $content);
+        $this->assertStringNotContainsString('lock_config', $content);
+    }
 }

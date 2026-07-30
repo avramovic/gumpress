@@ -30,7 +30,7 @@ set `type` explicitly only if you have an unusual layout.
 | `disallow_test_keys` | `false` | Reject Gumroad test-mode purchases. |
 | `payment_grace` | `7` | Days a subscription stays valid after a failed payment. |
 | `max_uses` | `0` (disabled) | Seat limit. **Read this before changing it** — see [Seat limiting](#seat-limiting). |
-| `max_uses_policy` | `'warn'` | `'warn'` shows a notice when over the limit; `'block'` invalidates the license. |
+| `max_uses_policy` | `'block'` | `'block'` invalidates the license when over the limit; `'warn'` only shows a notice. |
 | `license_check_url` | Gumroad's API | Point this at your own proxy to add server-side seat enforcement, custom entitlements, etc. |
 | `proxy_fallback` | `false` | If your custom `license_check_url` is unreachable, fall back to Gumroad directly. Off by default because a proxy is usually doing enforcement Gumroad-direct can't. |
 | `offline_grace` | `14` | Days a previously-valid license stays valid while the license server is unreachable. |
@@ -84,7 +84,9 @@ a seller access token (which a distributed plugin can't hold). `max_uses`
 defaults to **disabled** (`0`) because a naive seat count breaks real
 workflows: cloning production to staging, restoring a database backup, or a
 `search-replace` on the domain all look like a "new site" and would push
-`uses` past the limit — locking out a paying customer.
+`uses` past the limit — locking out a paying customer. If you do set a limit,
+being over it invalidates the license by default (`max_uses_policy` is
+`'block'`) — set it to `'warn'` if you'd rather just show a notice.
 
 GumPress avoids re-incrementing for the same (license key, site) pair, and
 never increments outside of what looks like a production environment

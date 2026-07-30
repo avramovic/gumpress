@@ -159,6 +159,31 @@ if (!function_exists('is_multisite')) {
     }
 }
 
+if (!function_exists('get_file_data')) {
+    /**
+     * Cut-down version of WP core's get_file_data(): scans the first 8KB of
+     * $file for "Header Name: value" doc-comment lines. Just enough for
+     * Module::read_headers()/label() to be testable without a real
+     * WordPress checkout.
+     */
+    function get_file_data($file, $headers)
+    {
+        $contents = @file_get_contents($file);
+        $contents = $contents === false ? '' : str_replace("\r", "\n", substr($contents, 0, 8192));
+
+        $result = [];
+        foreach ($headers as $field => $regex) {
+            if (preg_match('/^[ \t\/*#@]*' . preg_quote($regex, '/') . ':(.*)$/mi', $contents, $match) && $match[1] !== '') {
+                $result[$field] = trim(preg_replace('/\s*(?:\*\/|\?>).*/', '', $match[1]));
+            } else {
+                $result[$field] = '';
+            }
+        }
+
+        return $result;
+    }
+}
+
 $GLOBALS['__gumpress_test_cron'] = [];
 
 if (!function_exists('wp_next_scheduled')) {

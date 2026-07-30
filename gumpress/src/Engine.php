@@ -19,8 +19,8 @@ final class Engine
             $decoded = Config::decode_encrypted($blob, $product);
             if ($decoded === null) {
                 Notices::queue(sprintf(
-                    'GumPress: encrypted configuration for "%s" failed its tamper check and was ignored.',
-                    $product
+                    'GumPress: encrypted configuration for %s failed its tamper check and was ignored.',
+                    Module::label($file, $product)
                 ));
                 $decoded = [];
             } else {
@@ -35,7 +35,7 @@ final class Engine
         }
 
         $config = new Config($options);
-        self::maybe_warn_unsealed_config($config, $product);
+        self::maybe_warn_unsealed_config($config, $product, $file);
 
         return Module::create($file, $product, $config);
     }
@@ -56,8 +56,12 @@ final class Engine
      * like the quick-start's payment_grace => 7) ships nothing worth
      * hiding, so there's nothing for sealing to protect. The warning should
      * only show up once there's an actual secret to seal.
+     *
+     * $file is optional (and omitted by the direct-call tests below) so the
+     * notice degrades to identifying the module by its bare product id
+     * rather than failing to warn at all when a caller has no file path.
      */
-    public static function maybe_warn_unsealed_config(Config $config, string $product): void
+    public static function maybe_warn_unsealed_config(Config $config, string $product, ?string $file = null): void
     {
         if ($config->get('_encrypted') || $config->is_default() || !Env::is_non_production()) {
             return;
@@ -65,12 +69,16 @@ final class Engine
 
         $configurator_url = (string) ($config->get('configurator_url') ?? Config::DEFAULT_CONFIGURATOR_URL);
         $link = self::configurator_link($configurator_url, $product, $config);
+        $configured_type = $config->get('type');
+        $label = $file === null
+            ? sprintf('"%s"', $product)
+            : Module::label($file, $product, is_string($configured_type) ? $configured_type : null);
 
         Notices::queue_html(sprintf(
-            'GumPress: "%s" is running with an unsealed (plain-array) configuration outside of '
+            'GumPress: %s is running with an unsealed (plain-array) configuration outside of '
             . 'production. Anyone with file or hosting access can silently edit its settings — including '
             . 'which server it reports to — with a text editor. <a href="%s" target="_blank">Seal it before shipping</a>.',
-            esc_html($product),
+            esc_html($label),
             esc_url($link)
         ), 'warning');
     }

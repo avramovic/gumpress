@@ -97,6 +97,40 @@ final class EnvTest extends TestCase
         $this->assertStringContainsString(Config::DEFAULT_CONFIGURATOR_URL, $queued[0]['content']);
     }
 
+    public function test_unsealed_config_notice_identifies_the_module_by_name_when_a_file_is_given(): void
+    {
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        Engine::maybe_warn_unsealed_config(
+            new Config(['max_uses' => 1]),
+            'acme-plugin',
+            __DIR__ . '/fixtures/acme-plugin/acme-plugin.php'
+        );
+
+        $content = Notices::queued_for_tests()[0]['content'];
+
+        $this->assertStringContainsString('Acme Pro', $content);
+        $this->assertStringContainsString('acme-plugin', $content);
+        // The configurator link must still carry the raw product_id, not the name.
+        $this->assertStringContainsString('product_id=acme-plugin', $content);
+    }
+
+    public function test_unsealed_config_notice_falls_back_to_the_product_id_when_the_name_cant_be_read(): void
+    {
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        Engine::maybe_warn_unsealed_config(
+            new Config(['max_uses' => 1]),
+            'acme-plugin',
+            __DIR__ . '/fixtures/no-name-plugin/no-name-plugin.php'
+        );
+
+        $content = Notices::queued_for_tests()[0]['content'];
+
+        $this->assertStringContainsString('acme-plugin', $content);
+        $this->assertStringNotContainsString('Acme Pro', $content);
+    }
+
     public function test_unsealed_config_stays_silent_in_production(): void
     {
         Engine::maybe_warn_unsealed_config(new Config([]), 'acme-plugin');

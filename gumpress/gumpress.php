@@ -82,9 +82,9 @@ final class GumPress
             // v1's register($file, $id, $options, $callbacks) — v2 has no callbacks
             // parameter, so a 4th argument means an old call site, not new config.
             \GumPress\V2\Notices::queue(sprintf(
-                'GumPress: "%s" was registered using an incompatible GumPress 1.x call signature '
+                'GumPress: %s was registered using an incompatible GumPress 1.x call signature '
                 . 'and was not loaded. Update it to GumPress 2 — see MIGRATION.md.',
-                $product
+                \GumPress\V2\Module::label($file, $product)
             ));
 
             return new \GumPress\V2\NullModule($product);
@@ -93,8 +93,8 @@ final class GumPress
         $dir = self::owning_source_dir($file);
         if ($dir === null) {
             \GumPress\V2\Notices::queue(sprintf(
-                'GumPress: could not determine which bundled copy of GumPress "%s" belongs to.',
-                $product
+                'GumPress: could not determine which bundled copy of GumPress %s belongs to.',
+                \GumPress\V2\Module::label($file, $product)
             ));
 
             return new \GumPress\V2\NullModule($product);
@@ -107,7 +107,10 @@ final class GumPress
             $module = call_user_func($create, $file, $product, $engine_options);
         } catch (\Throwable $e) {
             error_log('GumPress: failed to initialize module "' . $product . '": ' . $e->getMessage());
-            \GumPress\V2\Notices::queue(sprintf('GumPress: "%s" failed to initialize and has been disabled.', $product));
+            \GumPress\V2\Notices::queue(sprintf(
+                'GumPress: %s failed to initialize and has been disabled.',
+                \GumPress\V2\Module::label($file, $product)
+            ));
 
             return new \GumPress\V2\NullModule($product);
         }

@@ -131,7 +131,14 @@ final class Module
 
     private function detect_type(): string
     {
-        $configured = $this->base_config->get('type');
+        return self::type_for($this->file, $this->base_config->get('type'));
+    }
+
+    /**
+     * @param mixed $configured
+     */
+    private static function type_for(string $file, $configured): string
+    {
         if (in_array($configured, ['plugin', 'theme'], true)) {
             return $configured;
         }
@@ -139,7 +146,7 @@ final class Module
         // Auto-detect from the file's location rather than v1's
         // strpos($file, '/themes/'), which silently misclassifies every theme
         // as a plugin on Windows (backslash paths never contain '/themes/').
-        $file = wp_normalize_path($this->file);
+        $file = wp_normalize_path($file);
         if (function_exists('get_theme_root') && str_starts_with($file, wp_normalize_path(get_theme_root()) . '/')) {
             return 'theme';
         }
@@ -208,25 +215,39 @@ final class Module
 
     private function read_module_data(): array
     {
+        return self::read_headers($this->file, $this->type);
+    }
+
+    /**
+     * The plugin/theme header lookup behind module_data(), factored out as a
+     * static so bootstrap-time code (Engine, the gumpress.php facade) can
+     * identify a module by name before — or without — a Module ever being
+     * constructed. See label() below.
+     */
+    public static function read_headers(string $file, ?string $type = null): array
+    {
         static $cache = [];
-        if (isset($cache[$this->product])) {
-            return $cache[$this->product];
+
+        $type = $type ?? self::type_for($file, null);
+        $cache_key = $file . '|' . $type;
+        if (isset($cache[$cache_key])) {
+            return $cache[$cache_key];
         }
 
-        if ($this->type === 'plugin') {
+        if ($type === 'plugin') {
             // get_file_data() lives in wp-includes/functions.php, which core loads
             // unconditionally — unlike get_plugin_data(), it's always available,
             // including on front-end requests. v1 used get_plugin_data() guarded by
             // function_exists(), which silently fell through to reading THEME
             // headers on the frontend, reporting a plugin's own name/version wrong.
-            $headers = get_file_data($this->file, [
+            $headers = get_file_data($file, [
                 'Name' => 'Plugin Name',
                 'Version' => 'Version',
                 'Author' => 'Author',
                 'Description' => 'Description',
             ]);
         } else {
-            $theme = wp_get_theme($this->slug());
+            $theme = wp_get_theme(basename(dirname(wp_normalize_path($file))));
             $headers = [
                 'Name' => (string) $theme->get('Name'),
                 'Version' => (string) $theme->get('Version'),
@@ -235,7 +256,32 @@ final class Module
             ];
         }
 
-        return $cache[$this->product] = $headers;
+        return $cache[$cache_key] = $headers;
+    }
+
+    /**
+     * Human-readable identification for bootstrap notices, which only have a
+     * file path and an opaque Gumroad product_id to work with — no Module
+     * exists yet at the point most of these fire. Never throws: a licensing
+     * library must not fatal, least of all while reporting an error, so an
+     * unreadable header just falls back to the bare id, exactly as before
+     * this existed.
+     */
+    public static function label(string $file, string $product, ?string $type = null): string
+    {
+        if (!function_exists('get_file_data')) {
+            return sprintf('"%s"', $product);
+        }
+
+        try {
+            $name = (string) (self::read_headers($file, $type)['Name'] ?? '');
+        } catch (\Throwable $e) {
+            $name = '';
+        }
+
+        return $name === ''
+            ? sprintf('"%s"', $product)
+            : sprintf('"%s"', $name);
     }
 
     public function license_key(): ?string

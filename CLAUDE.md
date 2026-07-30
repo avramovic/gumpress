@@ -72,7 +72,11 @@ the whole class structure:
 
 1. `Engine::create()` — decodes an encrypted config blob if `register()` was passed a sealed
    string (see `Config::decode_encrypted`), builds a `Config`, warns (once, non-production
-   only) if the config is unsealed and non-default, then builds the `Module`.
+   only) if the config is unsealed and non-default, then builds the `Module`. Bootstrap-level
+   notices (this one, plus the frozen facade's own registration-failure notices in
+   `gumpress.php`) identify the module by its plugin/theme name — via `Module::label()`, a
+   static header read that works from a bare file path before any `Module` exists — falling
+   back to the raw product_id only when the header can't be read.
 2. `Config` — all defaults live here once (`DEFAULTS` const). Holds both the sealed-config
    codec (AES-256-CBC + HMAC-SHA256, prefix `gp1`) and `is_white_label()` (derived from
    whether `license_check_url`'s host contains `gumpress`, not a config flag).

@@ -91,6 +91,44 @@ final class Module
         return $this->network_wide;
     }
 
+    /** Unschedules this module's refresh event. Called on deactivation. */
+    public function unschedule(): void
+    {
+        $hook = $this->cron_hook();
+
+        while (($timestamp = wp_next_scheduled($hook)) !== false) {
+            wp_unschedule_event($timestamp, $hook);
+        }
+    }
+
+    /**
+     * Removes every trace of this module from the database. Called on
+     * uninstall — before this existed, all of it (plus the cron event)
+     * survived plugin deletion forever.
+     */
+    public function uninstall(): void
+    {
+        $this->unschedule();
+        $this->api->purge();
+
+        foreach (['license_key', 'schema'] as $suffix) {
+            $name = $this->option_name($suffix);
+
+            if ($this->network_wide) {
+                delete_site_option($name);
+            } else {
+                delete_option($name);
+            }
+        }
+
+        delete_transient($this->option_name('update_cache'));
+    }
+
+    private function cron_hook(): string
+    {
+        return 'gumpress_refresh_' . $this->product;
+    }
+
     private function detect_type(): string
     {
         $configured = $this->base_config->get('type');
@@ -350,7 +388,7 @@ final class Module
             Updater::register($this);
         }
 
-        $cron_hook = 'gumpress_refresh_' . $this->product;
+        $cron_hook = $this->cron_hook();
         add_action($cron_hook, function () {
             $this->api->force_refresh();
         });

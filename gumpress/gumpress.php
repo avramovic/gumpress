@@ -113,6 +113,7 @@ final class GumPress
         }
 
         self::$modules[$product] = $module;
+        self::register_lifecycle($file, $module);
         self::hook_boot();
 
         if (did_action('after_setup_theme')) {
@@ -131,6 +132,62 @@ final class GumPress
     public static function for(string $product)
     {
         return self::$modules[$product] ?? new \GumPress\V2\NullModule($product);
+    }
+
+    /**
+     * Cleanup hooks, so a deleted plugin doesn't leave its options and a
+     * twice-daily cron event behind forever.
+     *
+     * Both callbacks are deliberately [self::class, ...] on THIS facade
+     * rather than on the engine classes: register_uninstall_hook serializes
+     * the callable into the uninstall_plugins option, and bin/build.php
+     * rewrites the engine namespace per version (GumPress\v2_0_0), so a
+     * stored engine callable would dangle the moment a site upgrades to a
+     * build with a different suffix. The facade's name never changes.
+     */
+    private static function register_lifecycle(string $file, $module): void
+    {
+        // Themes have no equivalent lifecycle hooks, and the test harness
+        // doesn't define these at all.
+        if ($module->type() !== 'plugin' || !function_exists('register_deactivation_hook')) {
+            return;
+        }
+
+        register_deactivation_hook($file, [self::class, 'on_deactivate']);
+        register_uninstall_hook($file, [self::class, 'on_uninstall']);
+    }
+
+    /**
+     * Both hooks fire for one specific plugin file, but WordPress passes the
+     * callback no arguments — and by uninstall time every OTHER active
+     * plugin is loaded too, so acting on all registered modules would wipe
+     * their state as well. The hook name carries the file, so recover it
+     * from there and touch only the modules that plugin registered.
+     */
+    private static function each_module_for_current_hook(string $prefix, string $method): void
+    {
+        $hook = function_exists('current_filter') ? (string) current_filter() : '';
+        if (!str_starts_with($hook, $prefix)) {
+            return;
+        }
+
+        $basename = substr($hook, strlen($prefix));
+
+        foreach (self::$modules as $module) {
+            if ($module->module_basename() === $basename) {
+                $module->$method();
+            }
+        }
+    }
+
+    public static function on_deactivate(): void
+    {
+        self::each_module_for_current_hook('deactivate_', 'unschedule');
+    }
+
+    public static function on_uninstall(): void
+    {
+        self::each_module_for_current_hook('uninstall_', 'uninstall');
     }
 
     /**

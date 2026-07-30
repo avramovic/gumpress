@@ -16,6 +16,9 @@ namespace GumPress\V2;
  */
 final class Api
 {
+    /** Bumped whenever the shape or encoding of a stored option changes. */
+    private const SCHEMA = 2;
+
     private Module $module;
 
     public function __construct(Module $module)
@@ -36,9 +39,16 @@ final class Api
             'payload' => null,
         ];
 
-        $stored = $this->option_get($this->state_key(), []);
+        // Vault::open() returns null for a blob that can't be decrypted —
+        // most plausibly because the site's wp-config salts were rotated.
+        // That is deliberately indistinguishable from "never checked": the
+        // defaults below make due() fire a fresh verify, which restores the
+        // cache silently. Note the seat option (should_increment()) is NOT
+        // encrypted precisely so it survives that, and no site reports a
+        // spurious activation just because its salts changed.
+        $stored = Vault::open($this->option_get($this->state_key(), []));
 
-        return array_merge($defaults, is_array($stored) ? $stored : []);
+        return array_merge($defaults, $stored ?? []);
     }
 
     public function due(): bool
@@ -49,11 +59,55 @@ final class Api
         }
 
         $state = $this->state();
-        if (($state['key_hash'] ?? null) !== self::hash_key($key)) {
+        if (($state['key_hash'] ?? null) !== $this->hash_key($key)) {
             return true; // key just changed; check immediately regardless of backoff.
         }
 
         return time() >= (int) ($state['next_attempt_at'] ?? 0);
+    }
+
+    /**
+     * Brings stored options up to SCHEMA. Runs from the two entry points
+     * that can lead to a verify, and must run BEFORE due() and before
+     * should_increment() — the whole point is that an install upgrading to
+     * this release neither reports a new activation nor forces an immediate
+     * re-check just because the fingerprint algorithm changed.
+     *
+     * Schema 2: key_hash moved from md5() to hash_key()'s HMAC-SHA256. The
+     * license key is still on hand, so the old value can be recomputed and
+     * rewritten in place rather than left for the comparison paths to
+     * tolerate forever. A key_hash belonging to some *other* key won't match
+     * the legacy value and is deliberately left alone, so a genuine key
+     * change still registers as one.
+     */
+    public function migrate(): void
+    {
+        $marker = $this->module->option_name('schema');
+
+        if ((int) $this->option_get($marker, 0) >= self::SCHEMA) {
+            return;
+        }
+
+        $key = $this->module->license_key();
+
+        if ($key !== null && $key !== '') {
+            $legacy = md5($key);
+            $current = $this->hash_key($key);
+
+            $state = Vault::open($this->option_get($this->state_key(), []));
+            if (is_array($state) && ($state['key_hash'] ?? null) === $legacy) {
+                $state['key_hash'] = $current;
+                $this->option_set($this->state_key(), Vault::seal($state));
+            }
+
+            $seat = $this->option_get($this->seat_key(), []);
+            if (is_array($seat) && ($seat['key_hash'] ?? null) === $legacy) {
+                $seat['key_hash'] = $current;
+                $this->option_set($this->seat_key(), $seat);
+            }
+        }
+
+        $this->option_set($marker, self::SCHEMA);
     }
 
     /**
@@ -63,6 +117,8 @@ final class Api
      */
     public function ensure_scheduled(): void
     {
+        $this->migrate();
+
         if (!$this->due()) {
             return;
         }
@@ -80,6 +136,7 @@ final class Api
     /** Bypasses backoff. Used by the explicit "Re-validate" button. */
     public function force_refresh(): void
     {
+        $this->migrate();
         $this->verify_now();
     }
 
@@ -92,10 +149,10 @@ final class Api
             // previous license's payload (plan, owner, custom fields) stays
             // cached and keeps showing on the license page even though the
             // key was removed and there is nothing to display anymore.
-            $this->option_set($this->state_key(), [
+            $this->option_set($this->state_key(), Vault::seal([
                 'status' => 'no_key',
                 'checked_at' => time(),
-            ]);
+            ]));
             $this->module->forget_effective_config();
 
             return;
@@ -125,7 +182,7 @@ final class Api
         }
 
         $state = $this->interpret($response, $state, $key);
-        $this->option_set($this->state_key(), $state);
+        $this->option_set($this->state_key(), Vault::seal($state));
         $this->module->forget_effective_config();
     }
 
@@ -168,7 +225,7 @@ final class Api
     {
         $now = time();
         $state['checked_at'] = $now;
-        $state['key_hash'] = self::hash_key($key);
+        $state['key_hash'] = $this->hash_key($key);
 
         if ($this->is_transport_failure($response)) {
             $state['attempts'] = (int) ($state['attempts'] ?? 0) + 1;
@@ -283,7 +340,7 @@ final class Api
         $seat = $this->option_get($this->seat_key(), []);
         $host = Env::site_identity();
 
-        if (($seat['key_hash'] ?? null) === self::hash_key($key) && ($seat['host'] ?? null) === $host) {
+        if (($seat['key_hash'] ?? null) === $this->hash_key($key) && ($seat['host'] ?? null) === $host) {
             return false; // already recorded for this exact key + host.
         }
 
@@ -293,7 +350,7 @@ final class Api
     private function record_activation(string $key): void
     {
         $this->option_set($this->seat_key(), [
-            'key_hash' => self::hash_key($key),
+            'key_hash' => $this->hash_key($key),
             'host' => Env::site_identity(),
             'activated_at' => time(),
         ]);
@@ -318,9 +375,16 @@ final class Api
         return in_array($this->state()['status'] ?? null, ['ok', 'not_found'], true);
     }
 
+    /**
+     * Drops every trace of this module's licensing state. Called from the
+     * uninstall hook (see the GumPress facade) and safe to call directly —
+     * the next verify rebuilds whatever is still needed.
+     */
     public function purge(): void
     {
-        $this->option_set($this->state_key(), []);
+        $this->option_delete($this->state_key());
+        $this->option_delete($this->seat_key());
+        delete_transient($this->lock_key());
     }
 
     private function state_key(): string
@@ -338,9 +402,21 @@ final class Api
         return $this->module->option_name('seat');
     }
 
-    private static function hash_key(string $key): string
+    /**
+     * A fingerprint for equality comparison only — it detects that the
+     * stored key changed, and makes activation reporting idempotent. It is
+     * not a confidentiality measure: the raw key sits in a neighbouring
+     * option, and Gumroad keys carry enough entropy that no digest here is
+     * brute-forceable anyway.
+     *
+     * Scoped by product rather than by wp_salt() on purpose. A salt-derived
+     * fingerprint would change under a salt rotation, and a changed
+     * fingerprint is exactly what makes should_increment() report a new
+     * activation — see migrate() for why that matters.
+     */
+    private function hash_key(string $key): string
     {
-        return md5($key);
+        return hash_hmac('sha256', $key, 'gumpress|seat|' . $this->module->product_id());
     }
 
     /**
@@ -361,6 +437,15 @@ final class Api
             update_site_option($name, $value);
         } else {
             update_option($name, $value, false);
+        }
+    }
+
+    private function option_delete(string $name): void
+    {
+        if ($this->module->is_network_wide()) {
+            delete_site_option($name);
+        } else {
+            delete_option($name);
         }
     }
 }

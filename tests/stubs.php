@@ -24,6 +24,78 @@ if (!defined('WEEK_IN_SECONDS')) {
 $GLOBALS['__gumpress_test_home_url'] = 'https://example.com';
 $GLOBALS['__gumpress_test_env_type'] = 'production';
 
+// Stands in for one site's wp_options / transients. Reset it between tests
+// with gumpress_test_reset_store() — two tests sharing an option table would
+// leak state the way two separate WordPress installs never would.
+$GLOBALS['__gumpress_test_options'] = [];
+$GLOBALS['__gumpress_test_transients'] = [];
+$GLOBALS['__gumpress_test_salt'] = 'unit-test-salt';
+
+function gumpress_test_reset_store(): void
+{
+    $GLOBALS['__gumpress_test_options'] = [];
+    $GLOBALS['__gumpress_test_transients'] = [];
+    $GLOBALS['__gumpress_test_cron'] = [];
+    $GLOBALS['__gumpress_test_salt'] = 'unit-test-salt';
+}
+
+if (!function_exists('wp_salt')) {
+    function wp_salt($scheme = 'auth')
+    {
+        return $GLOBALS['__gumpress_test_salt'];
+    }
+}
+
+if (!function_exists('get_option')) {
+    function get_option($name, $default = false)
+    {
+        return $GLOBALS['__gumpress_test_options'][$name] ?? $default;
+    }
+}
+
+if (!function_exists('update_option')) {
+    function update_option($name, $value, $autoload = null)
+    {
+        $GLOBALS['__gumpress_test_options'][$name] = $value;
+
+        return true;
+    }
+}
+
+if (!function_exists('delete_option')) {
+    function delete_option($name)
+    {
+        unset($GLOBALS['__gumpress_test_options'][$name]);
+
+        return true;
+    }
+}
+
+if (!function_exists('get_transient')) {
+    function get_transient($name)
+    {
+        return $GLOBALS['__gumpress_test_transients'][$name] ?? false;
+    }
+}
+
+if (!function_exists('set_transient')) {
+    function set_transient($name, $value, $ttl = 0)
+    {
+        $GLOBALS['__gumpress_test_transients'][$name] = $value;
+
+        return true;
+    }
+}
+
+if (!function_exists('delete_transient')) {
+    function delete_transient($name)
+    {
+        unset($GLOBALS['__gumpress_test_transients'][$name]);
+
+        return true;
+    }
+}
+
 if (!function_exists('home_url')) {
     function home_url($path = '/')
     {
@@ -69,6 +141,47 @@ if (!function_exists('esc_url')) {
 if (!function_exists('add_action')) {
     function add_action(...$args)
     {
+        return true;
+    }
+}
+
+if (!function_exists('wp_normalize_path')) {
+    function wp_normalize_path($path)
+    {
+        return str_replace('\\', '/', (string) $path);
+    }
+}
+
+if (!function_exists('is_multisite')) {
+    function is_multisite()
+    {
+        return false;
+    }
+}
+
+$GLOBALS['__gumpress_test_cron'] = [];
+
+if (!function_exists('wp_next_scheduled')) {
+    function wp_next_scheduled($hook, $args = [])
+    {
+        return $GLOBALS['__gumpress_test_cron'][$hook] ?? false;
+    }
+}
+
+if (!function_exists('wp_schedule_event')) {
+    function wp_schedule_event($timestamp, $recurrence, $hook, $args = [])
+    {
+        $GLOBALS['__gumpress_test_cron'][$hook] = $timestamp;
+
+        return true;
+    }
+}
+
+if (!function_exists('wp_unschedule_event')) {
+    function wp_unschedule_event($timestamp, $hook, $args = [])
+    {
+        unset($GLOBALS['__gumpress_test_cron'][$hook]);
+
         return true;
     }
 }

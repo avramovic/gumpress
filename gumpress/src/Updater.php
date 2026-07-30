@@ -57,7 +57,7 @@ final class Updater
     private static function fetch(Module $module): ?array
     {
         $cache_key = $module->option_name('update_cache');
-        $cached = get_transient($cache_key);
+        $cached = Vault::open(get_transient($cache_key));
         if (is_array($cached)) {
             return $cached;
         }
@@ -102,7 +102,10 @@ final class Updater
             return null;
         }
 
-        set_transient($cache_key, $body, 6 * HOUR_IN_SECONDS);
+        // Sealed like the verify state: this body carries the package URL,
+        // which on a licensing server is often a signed/tokenized download
+        // link. An unreadable blob just means a refetch on the next check.
+        set_transient($cache_key, Vault::seal($body), 6 * HOUR_IN_SECONDS);
 
         return $body;
     }

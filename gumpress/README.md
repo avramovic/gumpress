@@ -260,6 +260,43 @@ build-time reminder aimed at you, the developer, not a runtime warning aimed
 at your customers, and it fires regardless of `suppress_notices` for exactly
 that reason.
 
+## What GumPress stores, and what's encrypted
+
+Everything lives in `wp_options` (or `wp_sitemeta` when the plugin is
+network-activated), named `gumpress_{product_id}_{suffix}`, all with autoload
+off:
+
+| Suffix | Contents | At rest |
+|---|---|---|
+| `license_key` | the key the customer entered | plaintext |
+| `state` | the cached verify response — **including `purchase.email` and checkout custom fields** | encrypted |
+| `seat` | a key fingerprint, the site host, an activation timestamp | plaintext |
+| `schema` | stored-data version marker, for migrations | plaintext |
+| `lock` (transient) | a 60-second mutex, value `1` | plaintext |
+| `update_cache` (transient) | the update-check response, including the package URL | encrypted |
+
+The two encrypted entries use AES-256-CBC with a random IV per write, plus an
+HMAC-SHA256 verified before decryption. The key derives from `wp_salt()`,
+i.e. from `wp-config.php` — deliberately not from the product id (which is
+part of the option's own name) or the licence key (which is stored right next
+to it). Without `ext-openssl` everything degrades to plaintext rather than
+failing.
+
+Be clear about what this does and doesn't buy: it protects against seeing the
+database *without* the filesystem — a SQL injection, or a leaked dump. Anyone
+holding both can still read everything, which is inherent to at-rest
+encryption in WordPress.
+
+`license_key` and `seat` stay readable on purpose. A rotated `wp-config` salt
+makes the encrypted entries undecryptable; GumPress treats that as an empty
+cache and silently re-verifies. Because the licence key is still there the
+site recovers unattended, and because the seat record is still there it
+doesn't report itself as a *new* activation — which against Gumroad direct
+would permanently bump a counter that never decrements.
+
+Deactivating unschedules the refresh event; uninstalling removes all of the
+above.
+
 ## More than one licensed product on the same site
 
 Each product resolves calls made from files inside its own directory

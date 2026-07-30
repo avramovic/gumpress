@@ -17,12 +17,27 @@ declare(strict_types=1);
  *                        anyone who prefers v1's one-file shape.
  */
 
+// Guarded because this script rrmdir()s $distModule: with $distRelative
+// missing it resolved to $root . '//gumpress' — the SOURCE tree — so a bare
+// `php bin/build.php` silently deleted gumpress/ before failing on the next
+// type error. Run it through ./build.sh, which supplies all three.
+if ($argc < 4) {
+    fwrite(STDERR, "Usage: php bin/build.php <version> <ns-suffix> <dist-dir>\n");
+    fwrite(STDERR, "Normally invoked via ./build.sh, which derives the first two from VERSION.\n");
+    exit(1);
+}
+
 [, $version, $nsSuffix, $distRelative] = $argv;
 
 $root = dirname(__DIR__);
 $srcRoot = $root . '/gumpress';
 $distRoot = $root . '/' . $distRelative;
 $distModule = $distRoot . '/gumpress';
+
+if ($distRelative === '' || realpath($distModule) === realpath($srcRoot)) {
+    fwrite(STDERR, "ERROR: refusing to build — <dist-dir> resolves onto the source tree.\n");
+    exit(1);
+}
 
 function gumpress_rrmdir(string $dir): void
 {

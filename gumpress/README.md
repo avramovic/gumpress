@@ -96,9 +96,18 @@ database. If you need real seat enforcement, do it in a self-hosted
 `license_check_url` proxy that holds your Gumroad seller token and tracks
 seats server-side — `max_uses` against Gumroad directly is advisory only.
 `uses` on the response then means *your* proxy's active-seat count, not
-Gumroad's verification counter — see
-[Server-controlled overrides](#server-controlled-overrides) for how to push
-that seat limit down to the plugin without a new release.
+Gumroad's verification counter.
+
+A proxy that reports its own seat model in the response takes over entirely:
+if `gumpress.seats` carries a `limit` (or `unlimited`), GumPress defers to
+your server's decision and stops applying `max_uses` at all — including a
+`max_uses` pushed via [Server-controlled overrides](#server-controlled-overrides).
+Your server already knows the real count and the real limit, and both can
+change after a plugin ships; a stale compiled-in cap second-guessing it is
+how a paying customer gets locked out of a seat they're entitled to.
+`max_uses` therefore only ever bites when nothing is reporting seats — i.e.
+Gumroad direct, or a proxy that omits the block. See
+[Seats reported by your server](#seats-reported-by-your-server).
 
 ## Server-controlled overrides
 
@@ -119,6 +128,11 @@ still sees an accurate reason instead of a bare "unreachable":
   }
 }
 ```
+
+Note the `max_uses` in that example only takes effect if the same response
+carries no `gumpress.seats` block — see
+[Seats reported by your server](#seats-reported-by-your-server). If your
+server tracks seats, report them there instead of pushing a cap here.
 
 Only a fixed whitelist of keys can ever be pushed this way: `max_uses`,
 `max_uses_policy`, `payment_grace`, `offline_grace`, `offline_policy`,
@@ -151,11 +165,50 @@ A response can also carry `gumpress.recheck_in` (seconds, clamped to
 15 minutes–30 days) to shorten the next check — e.g. so a freed seat is
 usable on another site within the hour instead of waiting out the normal
 12-hour/7-day cache TTL. Anything else your proxy adds to the response
-(`seats`, `notice`, `license_page_url`, or anything of your own) is passive
+(`notice`, `license_page_url`, or anything of your own) is passive
 pass-through, available the same way as any other extra field:
 
 ```php
 GumPress::extra('gumpress'); // the whole block, however you shaped it
+```
+
+## Seats reported by your server
+
+`gumpress.seats` is the one extra block GumPress acts on rather than just
+passing through:
+
+```json
+{
+  "success": true,
+  "uses": 3,
+  "purchase": { "...": "..." },
+  "gumpress": {
+    "seats": { "used": 3, "limit": 5, "unlimited": false }
+  }
+}
+```
+
+Send a numeric `limit`, or `"unlimited": true`. Either one marks your server
+as the authority on seats, which has two effects:
+
+- **`max_uses` stops applying** — compiled-in or pushed. Your server has
+  already decided; deny the request outright (`success: false`) if a site
+  shouldn't be licensed.
+- **The license page shows your numbers** — the Activations row renders
+  `used / limit` (or `used / unlimited`) straight from the block, instead of
+  counting against `max_uses`.
+
+Omit the block (or send one with neither key) and nothing changes: GumPress
+falls back to its own `max_uses` check exactly as before. That fallback is
+also what a malformed block gets, so a truncated response can't silently
+switch enforcement off.
+
+The whole block stays readable as usual, including any extra keys of your
+own:
+
+```php
+// null when the key has never verified, or the response carried no seats.
+GumPress::license()?->server_seats(); // ['used' => 3, 'limit' => 5, ...]
 ```
 
 ## Custom metadata

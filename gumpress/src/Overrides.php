@@ -7,8 +7,14 @@ namespace GumPress\V2;
 /**
  * Applies server-pushed config overrides — the `gumpress.config` object a
  * verify response can carry — on top of the integrator's own (defaults +
- * register() options) config. This is what makes `max_seats` set on the
- * licensing server win over whatever `max_uses` a developer compiled in.
+ * register() options) config, letting a licensing server retune a shipped
+ * plugin without a new release.
+ *
+ * Note `max_uses`/`max_uses_policy` are no longer the way a server's seat
+ * limit wins: any response carrying a `gumpress.seats` block makes
+ * Validator defer to the server's own seat count outright, ignoring
+ * max_uses whether compiled in or pushed. They stay overridable only for
+ * a proxy that reports no seats of its own.
  *
  * Every value is filtered through a fixed whitelist, the integrator's own
  * `lock_config` opt-out, and type-cast / clamped to a sane range before

@@ -36,11 +36,17 @@ final class NullModule
         return sprintf('GumPress: module "%s" is not available.', $this->product);
     }
 
+    // These four methods' return types are intentionally wider than what this
+    // class ever returns — they mirror Module's real signatures (see the
+    // class docblock) so a caller holding Module|NullModule sees one
+    // consistent contract regardless of which it got back.
+    // @phpstan-ignore-next-line return.unusedType
     public function license_key(): ?string
     {
         return null;
     }
 
+    // @phpstan-ignore-next-line return.unusedType
     public function license(): ?License
     {
         return null;
@@ -51,6 +57,7 @@ final class NullModule
         return false;
     }
 
+    // @phpstan-ignore-next-line return.unusedType
     public function tier(): ?string
     {
         return null;
@@ -64,6 +71,7 @@ final class NullModule
     /**
      * @return array|string|null
      */
+    // @phpstan-ignore-next-line return.unusedType
     public function meta(?string $key = null)
     {
         return $key === null ? [] : null;

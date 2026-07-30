@@ -206,10 +206,8 @@ final class Updater
         $package = $remote['package'] ?? $remote['download_url'] ?? '';
 
         // The plugin/theme update transient is a plain stdClass with dynamic
-        // properties (no declared class in WordPress core), which PHPStan's WP
-        // stubs can't type precisely.
+        // properties — no declared class in WordPress core.
         if ($module->type() === 'plugin') {
-            // @phpstan-ignore-next-line property.notFound
             $transient->response[$module->module_basename()] = (object) [
                 'slug' => $module->slug(),
                 'plugin' => $module->module_basename(),
@@ -219,7 +217,6 @@ final class Updater
                 'tested' => $remote['tested'] ?? '',
             ];
         } else {
-            // @phpstan-ignore-next-line property.notFound
             $transient->response[$module->slug()] = [
                 'theme' => $module->slug(),
                 'new_version' => $remote['version'],

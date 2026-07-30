@@ -67,9 +67,16 @@ final class Validator
             }
         }
 
-        $max = (int) $config->get('max_uses', 0);
-        if ($max > 0 && $license->uses() > $max && $config->get('max_uses_policy', 'block') === 'block') {
-            return new Status(Status::SEAT_LIMIT, ['uses' => $license->uses(), 'max' => $max]);
+        // A licensing server reporting its own seat model is authoritative:
+        // its `uses`/limit can move independently of whatever max_uses was
+        // sealed into this config at build time (a raised or lowered
+        // default_seat_limit, a per-license override, etc.), so the shim's
+        // own cap must stand down rather than second-guess it.
+        if (!$license->has_server_seats()) {
+            $max = (int) $config->get('max_uses', 0);
+            if ($max > 0 && $license->uses() > $max && $config->get('max_uses_policy', 'block') === 'block') {
+                return new Status(Status::SEAT_LIMIT, ['uses' => $license->uses(), 'max' => $max]);
+            }
         }
 
         return new Status(Status::VALID);
@@ -80,10 +87,13 @@ final class Validator
      * regardless of whether that's configured to block or merely warn. Kept
      * separate from evaluate() so the admin UI can surface a "warn" notice
      * even when the overall status is VALID.
+     *
+     * Deliberately false whenever a licensing server is reporting its own
+     * seat model — see evaluate() for why max_uses stands down in that case.
      */
     public static function seat_over_limit(?License $license, Config $config): bool
     {
-        if ($license === null) {
+        if ($license === null || $license->has_server_seats()) {
             return false;
         }
 

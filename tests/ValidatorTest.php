@@ -223,9 +223,17 @@ final class ValidatorTest extends TestCase
     }
 
     /**
-     * This is the entire point of the server override channel: a licensing
-     * server's own seat count must be able to tighten what the plugin was
-     * compiled with, without a new release.
+     * Historically "the entire point of the server override channel": a
+     * licensing server's own seat count tightening what the plugin was
+     * compiled with, without a new release. In production this override
+     * channel is now moot for a real gumpress licensing server, since any
+     * response it sends also carries a `gumpress.seats` block, which makes
+     * evaluate() defer to the server's own seat check instead (see
+     * test_server_seats_disable_the_local_max_uses_block below) — tightening
+     * a customer's seat cap is done via the product's default_seat_limit,
+     * not by pushing max_uses. This test still pins the raw Config/Overrides
+     * mechanics for the case where no `seats` block is present (e.g. a
+     * bespoke proxy that doesn't send one).
      */
     public function test_server_override_can_tighten_the_seat_limit(): void
     {
@@ -246,5 +254,49 @@ final class ValidatorTest extends TestCase
         $status = Validator::evaluate($license, true, null, $effective);
 
         $this->assertSame(Status::VALID, $status->code());
+    }
+
+    /**
+     * The regression this whole change fixes: a stale, locally-sealed
+     * max_uses must not override a licensing server that just reported the
+     * license as within its (possibly since-changed) seat limit.
+     */
+    public function test_server_seats_disable_the_local_max_uses_block(): void
+    {
+        $license = self::load('valid-with-server-seats'); // uses: 3, gumpress.seats.limit: 5
+
+        $status = Validator::evaluate($license, true, null, new Config(['max_uses' => 1, 'max_uses_policy' => 'block']));
+
+        $this->assertSame(Status::VALID, $status->code());
+    }
+
+    public function test_server_seats_disable_the_over_limit_warning(): void
+    {
+        $license = self::load('valid-with-server-seats'); // uses: 3, gumpress.seats.limit: 5
+
+        $this->assertFalse(Validator::seat_over_limit($license, new Config(['max_uses' => 1])));
+    }
+
+    public function test_server_seats_disable_the_local_max_uses_block_when_unlimited(): void
+    {
+        $license = self::load('valid-with-server-seats-unlimited'); // uses: 12, gumpress.seats.unlimited: true
+
+        $status = Validator::evaluate($license, true, null, new Config(['max_uses' => 1, 'max_uses_policy' => 'block']));
+
+        $this->assertSame(Status::VALID, $status->code());
+        $this->assertFalse(Validator::seat_over_limit($license, new Config(['max_uses' => 1])));
+    }
+
+    /**
+     * Pins the Gumroad-direct path explicitly: without a `gumpress.seats`
+     * block, max_uses still applies exactly as before this change.
+     */
+    public function test_max_uses_still_applies_without_a_server_seats_block(): void
+    {
+        $license = self::load('valid-subscription'); // uses: 3, no gumpress block at all
+
+        $status = Validator::evaluate($license, true, null, new Config(['max_uses' => 1, 'max_uses_policy' => 'block']));
+
+        $this->assertSame(Status::SEAT_LIMIT, $status->code());
     }
 }

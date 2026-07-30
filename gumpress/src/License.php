@@ -204,6 +204,36 @@ final class License
         return $extra[$key] ?? $default;
     }
 
+    /**
+     * The `gumpress.seats` block from a self-hosted licensing server, or null
+     * when the response didn't come from one (e.g. Gumroad direct).
+     */
+    public function server_seats(): ?array
+    {
+        $gumpress = $this->extra('gumpress');
+        $seats = is_array($gumpress) ? ($gumpress['seats'] ?? null) : null;
+
+        return is_array($seats) ? $seats : null;
+    }
+
+    /**
+     * True when a licensing server is answering and reporting its own seat
+     * model for this license. Once true, the server is authoritative on
+     * seats: the shim's own `max_uses` cap must stand down (see Validator),
+     * since the server's `uses` count and its seat limit can move
+     * independently of whatever was sealed into this config at build time.
+     *
+     * Requires an actual limit — either a numeric `limit` or `unlimited` —
+     * rather than just the presence of a `seats` key, so a malformed or
+     * truncated block can't silently disable the local check.
+     */
+    public function has_server_seats(): bool
+    {
+        $seats = $this->server_seats();
+
+        return $seats !== null && (array_key_exists('limit', $seats) || !empty($seats['unlimited']));
+    }
+
     public function raw(): array
     {
         return $this->raw;

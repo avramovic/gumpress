@@ -246,14 +246,26 @@ final class Admin
                 self::row(esc_html__('Plan', $domain), esc_html($plan));
             }
 
-            $max = (int) $module->config()->get('max_uses', 0);
-            if ($max > 0) {
+            $server_seats = $license->server_seats();
+            if ($license->has_server_seats()) {
+                $limit = !empty($server_seats['unlimited'])
+                    ? esc_html__('unlimited', $domain)
+                    : esc_html((string) ($server_seats['limit'] ?? 0));
+
                 self::row(
                     esc_html__('Activations', $domain),
-                    esc_html((string) $license->uses()) . ' / ' . esc_html((string) $max)
+                    esc_html((string) ($server_seats['used'] ?? $license->uses())) . ' / ' . $limit
                 );
-            } elseif ($license->uses() > 0) {
-                self::row(esc_html__('Activations recorded', $domain), esc_html((string) $license->uses()));
+            } else {
+                $max = (int) $module->config()->get('max_uses', 0);
+                if ($max > 0) {
+                    self::row(
+                        esc_html__('Activations', $domain),
+                        esc_html((string) $license->uses()) . ' / ' . esc_html((string) $max)
+                    );
+                } elseif ($license->uses() > 0) {
+                    self::row(esc_html__('Activations recorded', $domain), esc_html((string) $license->uses()));
+                }
             }
 
             if (!$module->config()->get('hide_owner_email') && $license->email()) {

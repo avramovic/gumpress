@@ -149,10 +149,21 @@ final class Api
             // previous license's payload (plan, owner, custom fields) stays
             // cached and keeps showing on the license page even though the
             // key was removed and there is nothing to display anymore.
-            $this->option_set($this->state_key(), Vault::seal([
+            // white_label is deliberately carried forward, not reset: this
+            // clears the previous CUSTOMER's license data, but branding is
+            // an entitlement of the DEVELOPER, not of whichever key was
+            // last entered — clearing it here would show our credit on
+            // every site the instant a customer cleared their key.
+            $fresh = [
                 'status' => 'no_key',
                 'checked_at' => time(),
-            ]));
+            ];
+            $whiteLabel = $this->state()['white_label'] ?? null;
+            if ($whiteLabel !== null) {
+                $fresh['white_label'] = $whiteLabel;
+            }
+
+            $this->option_set($this->state_key(), Vault::seal($fresh));
             $this->module->forget_effective_config();
 
             return;
@@ -269,6 +280,18 @@ final class Api
         $state['payload'] = $license->raw();
         $state['uses'] = $license->uses();
 
+        // Written here, before the success() check below, so a denial
+        // (success:false — e.g. an expired/invalid key) still carries a
+        // fresh white_label answer, not just an outright valid response —
+        // see the sticky-state rationale on License::white_label(). Only
+        // written when the response actually addressed it (not null) —
+        // Gumroad direct, an older server, or a foreign proxy leave
+        // whatever was already cached untouched rather than clearing it.
+        $white_label = $license->white_label();
+        if ($white_label !== null) {
+            $state['white_label'] = $white_label;
+        }
+
         // A licensing server can shorten (never lengthen beyond the normal caps)
         // the next check via gumpress.recheck_in — e.g. so a freed seat is
         // usable elsewhere within the hour instead of after the full 12h/7d TTL.
@@ -321,6 +344,20 @@ final class Api
         $config = is_array($gumpress) ? ($gumpress['config'] ?? null) : null;
 
         return is_array($config) ? $config : [];
+    }
+
+    /**
+     * The sticky white_label flag written by interpret() — null when a
+     * licensing server has never addressed it (never verified yet, or
+     * every verify so far went to Gumroad direct/a foreign proxy). See
+     * Module::is_white_label() for how that null falls back to the
+     * compiled-in pre-activation hint.
+     */
+    public function white_label(): ?bool
+    {
+        $value = $this->state()['white_label'] ?? null;
+
+        return is_bool($value) ? $value : null;
     }
 
     private function backoff_seconds(int $attempts): int

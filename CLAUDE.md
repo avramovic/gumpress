@@ -77,9 +77,13 @@ the whole class structure:
    `gumpress.php`) identify the module by its plugin/theme name — via `Module::label()`, a
    static header read that works from a bare file path before any `Module` exists — falling
    back to the raw product_id only when the header can't be read.
-2. `Config` — all defaults live here once (`DEFAULTS` const). Holds both the sealed-config
-   codec (AES-256-CBC + HMAC-SHA256, prefix `gp1`) and `is_white_label()` (derived from
-   whether `license_check_url`'s host contains `gumpress`, not a config flag).
+2. `Config` — all defaults live here once (`DEFAULTS` const), including the sealed-config
+   codec (AES-256-CBC + HMAC-SHA256, prefix `gp1`). `white_label` is one of those defaults
+   (`false`) but is only ever a pre-activation hint — see `Module::is_white_label()`, which
+   prefers a licensing server's own sticky `gumpress.white_label` answer (cached in `Api`
+   state, see point 4 below) over this compiled-in value, permanently, including back to
+   `false`. Never reachable via `Overrides`/`lock_config` — see `Overrides::OVERRIDABLE`'s
+   docblock.
 3. `Module` — one instance per registered product, created once and living for the rest of
    the request (unlike 1.x, which reconstructed state on every call). Owns the module's
    `base_config()` (compiled-in) vs. `config()` (base + server-pushed `Overrides` applied,
@@ -93,6 +97,10 @@ the whole class structure:
    cached only HTTP 200, making an invalid key trigger a blocking HTTP request on every admin
    page load). `should_increment()` decides whether a verify call counts as a real seat
    activation, using `Env` to avoid burning a seat on local/staging/WP-CLI environments.
+   Also stores a sticky `white_label` flag alongside the cached payload — written only when
+   a response actually addresses it, so it survives a denial, a 4xx, or the customer
+   clearing their license key (all of which null/replace `payload`, but must not silently
+   put the admin footer credit back).
 5. `Validator::evaluate()` — the validity state machine: **ordered, independent guard
    clauses** (test key → refunded → chargebacked → disputed → subscription state → seat
    limit → valid), each returning early. This ordering is deliberate and is "the actual

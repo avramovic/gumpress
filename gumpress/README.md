@@ -211,6 +211,39 @@ own:
 GumPress::license()?->server_seats(); // ['used' => 3, 'limit' => 5, ...]
 ```
 
+## Your server waiving the admin footer credit
+
+The license page normally shows "Protected with ♥ by GumPress" in the
+wp-admin footer. A self-hosted licensing server can waive it, per verify
+response:
+
+```json
+{
+  "success": true,
+  "uses": 3,
+  "purchase": { "...": "..." },
+  "gumpress": {
+    "white_label": true
+  }
+}
+```
+
+There is deliberately **no local option to turn this off** — it isn't a
+config key, it can't be pushed through `gumpress.config`, and it isn't
+subject to `lock_config`. That's on purpose: it's your licensing server's
+call, not something a config array (yours or a compromised override) should
+be able to grant itself. `GumPress::is_white_label()` reports the current
+answer.
+
+The flag is sticky, not read fresh off the latest payload — once your server
+has sent an explicit `true` or `false`, that answer survives an unreachable
+server, an invalid/expired key, or the customer clearing their license key
+entirely, and only changes again once your server sends a new explicit
+value. Omit the key (or the whole `gumpress` block) and nothing changes:
+whatever was last cached stays in effect, same as `gumpress.seats`'
+"omit and nothing changes" fallback above — this key is never inferred from
+`license_check_url` or anything else about your setup.
+
 ## Custom metadata
 
 Gumroad checkout custom fields, in whichever shape the API sends them (a list
@@ -271,7 +304,7 @@ off:
 | Suffix | Contents | At rest |
 |---|---|---|
 | `license_key` | the key the customer entered | plaintext |
-| `state` | the cached verify response — **including `purchase.email` and checkout custom fields** | encrypted |
+| `state` | the cached verify response — **including `purchase.email` and checkout custom fields** — plus a sticky `white_label` flag (see "Your server waiving the admin footer credit" below) | encrypted |
 | `seat` | a key fingerprint, the site host, an activation timestamp | plaintext |
 | `schema` | stored-data version marker, for migrations | plaintext |
 | `lock` (transient) | a 60-second mutex, value `1` | plaintext |

@@ -49,11 +49,21 @@ final class Admin
             }
         }
 
-        if (!$module->base_config()->is_white_label()) {
-            add_action('load-' . self::hook_suffix($module), static function () {
-                add_filter('admin_footer_text', [self::class, 'footer_text']);
-            });
-        }
+        // Deferred to the load-{hook_suffix} closure rather than decided
+        // here: is_white_label() reads Api state (a non-autoloaded
+        // get_option() plus a Vault decrypt), which register() would
+        // otherwise pay on every single admin request site-wide for a
+        // value only the license page itself needs. It's also more
+        // correct there — admin_init (where a throttled verify can fire)
+        // runs before load-{hook_suffix}, so the closure sees this
+        // request's own fresh answer, not last request's.
+        add_action('load-' . self::hook_suffix($module), static function () use ($module) {
+            if ($module->is_white_label()) {
+                return;
+            }
+
+            add_filter('admin_footer_text', [self::class, 'footer_text']);
+        });
 
         if ($module->config()->get('hide_menu_page')) {
             add_action('admin_head', static function () use ($module) {

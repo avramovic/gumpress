@@ -71,6 +71,20 @@ final class Module
         $this->status_cache = null;
     }
 
+    /**
+     * True when the admin footer credit should be waived. The server's own
+     * sticky answer (Api::white_label(), pushed as gumpress.white_label —
+     * see docs/seat-authority.md's sibling design for gumpress.seats)
+     * always wins once one exists; base_config() (NOT config() — this must
+     * never be reachable through Overrides/lock_config, see
+     * Config::DEFAULTS's white_label entry) supplies only the
+     * pre-activation fallback before any server has ever answered.
+     */
+    public function is_white_label(): bool
+    {
+        return $this->api->white_label() ?? (bool) $this->base_config->get('white_label', false);
+    }
+
     public function api(): Api
     {
         return $this->api;

@@ -69,6 +69,17 @@ final class Config
         'license_page_title' => null,
         'license_page_menu' => null,
 
+        // A pre-activation hint ONLY, not a real option: closes the window
+        // before the plugin's first ever verify (no request is made until a
+        // license key is entered — see Api::due()), during which nothing
+        // has told this site whether its licensing server waives the admin
+        // footer credit or not. A licensing server's own explicit answer,
+        // once one arrives (Module::is_white_label()), always overrides
+        // this permanently and stickily, including back to false — this is
+        // NOT a substitute for that answer and must never be pushed
+        // through Overrides (see Overrides::OVERRIDABLE's docblock).
+        'white_label' => false,
+
         // Callbacks: license_page_top, license_page_bottom.
         'callbacks' => [],
 
@@ -100,27 +111,6 @@ final class Config
         $callback = $this->data['callbacks'][$key] ?? null;
 
         return is_callable($callback) ? $callback : $default;
-    }
-
-    /**
-     * True when the footer credit is waived: the integrator points
-     * license_check_url at a GumPress-run licensing server rather than
-     * Gumroad direct. Deliberately derived rather than configurable —
-     * there is no option to turn the credit off.
-     */
-    public function is_white_label(): bool
-    {
-        $url = (string) $this->get('license_check_url', self::DEFAULT_LICENSE_URL);
-        if ($url === '' || $url === self::DEFAULT_LICENSE_URL) {
-            return false;
-        }
-
-        $host = parse_url($url, PHP_URL_HOST);
-        if (!is_string($host) || $host === '') {
-            return false;
-        }
-
-        return in_array('gumpress', explode('.', strtolower($host)), true);
     }
 
     public function all(): array

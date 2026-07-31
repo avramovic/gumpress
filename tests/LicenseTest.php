@@ -120,4 +120,46 @@ final class LicenseTest extends TestCase
         $this->assertTrue(self::load('dispute-won')->dispute_won());
         $this->assertTrue(self::load('test-key')->is_test());
     }
+
+    private static function withGumpressBlock(?array $gumpress): License
+    {
+        $raw = ['success' => true, 'uses' => 1, 'purchase' => []];
+        if ($gumpress !== null) {
+            $raw['gumpress'] = $gumpress;
+        }
+
+        return new License($raw);
+    }
+
+    public function test_white_label_null_when_theres_no_gumpress_block_at_all(): void
+    {
+        $this->assertNull(self::withGumpressBlock(null)->white_label());
+    }
+
+    public function test_white_label_null_when_the_gumpress_block_omits_the_key(): void
+    {
+        $this->assertNull(self::withGumpressBlock(['seats' => ['used' => 1]])->white_label());
+    }
+
+    public function test_white_label_true(): void
+    {
+        $this->assertTrue(self::withGumpressBlock(['white_label' => true])->white_label());
+    }
+
+    public function test_white_label_false(): void
+    {
+        $this->assertFalse(self::withGumpressBlock(['white_label' => false])->white_label());
+    }
+
+    /**
+     * The safe failure direction is "show the credit" — a malformed value
+     * (e.g. a hand-rolled proxy sending the string "true") must read as
+     * null (server never really addressed it), not as truthy.
+     */
+    public function test_white_label_null_for_a_non_bool_value(): void
+    {
+        $this->assertNull(self::withGumpressBlock(['white_label' => 'true'])->white_label());
+        $this->assertNull(self::withGumpressBlock(['white_label' => 1])->white_label());
+        $this->assertNull(self::withGumpressBlock(['white_label' => null])->white_label());
+    }
 }

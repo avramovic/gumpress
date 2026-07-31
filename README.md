@@ -1,6 +1,7 @@
 # GumPress
 
-Drop-in Gumroad licensing for WordPress plugins and themes.
+Drop-in Gumroad licensing for WordPress plugins and themes. For full technical
+documentation check out the [Deep Wiki](https://deepwiki.com/avramovic/gumpress).
 
 ## What's new in 2.0
 

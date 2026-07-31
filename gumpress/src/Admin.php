@@ -100,7 +100,7 @@ final class Admin
         return '<em>' . sprintf(
             /* translators: %s: link to the GumPress project. */
             __('Protected with &hearts; by %s', 'gumpress'),
-            '<a href="https://gumpress.eu" target="_blank" rel="noopener noreferrer">GumPress</a>'
+            '<a href="https://gumpress.dev" target="_blank" rel="noopener noreferrer">GumPress</a>'
         ) . '</em>';
     }
 

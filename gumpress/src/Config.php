@@ -13,7 +13,7 @@ final class Config
 {
     public const DEFAULT_LICENSE_URL = 'https://api.gumroad.com/v2/licenses/verify';
 
-    public const DEFAULT_CONFIGURATOR_URL = 'https://gumpress.eu/configurator';
+    public const DEFAULT_CONFIGURATOR_URL = 'https://gumpress.dev/configurator';
 
     private const SEAL_PREFIX = 'gp1';
 

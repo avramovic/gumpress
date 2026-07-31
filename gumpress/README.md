@@ -273,7 +273,7 @@ composer encrypt your-gumroad-product-id '{"max_uses": 0, "update_check_url": "h
 
 (or `php bin/encrypt.php ...` directly, without Composer)
 
-The [licensing server's web configurator](https://gumpress.eu/configurator)
+The [licensing server's web configurator](https://gumpress.dev/configurator)
 does the same thing without touching a terminal, and can prefill
 `license_check_url`/`update_check_url` for products it knows about.
 

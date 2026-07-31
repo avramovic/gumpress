@@ -1,5 +1,4 @@
 /vendor/
-/composer.lock
 /dist/
 /dist-buildtest-tmp/
 /.phpunit.result.cache

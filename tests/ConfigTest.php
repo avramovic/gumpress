@@ -56,7 +56,6 @@ final class ConfigTest extends TestCase
     public function test_non_defaults_excludes_non_reproducible_keys(): void
     {
         $config = new Config([
-            'callbacks' => ['license_page_top' => static fn () => 'x'],
             'lock_config' => ['max_uses'],
             'configurator_url' => 'https://example.test/configurator',
             '_encrypted' => true,
@@ -66,21 +65,6 @@ final class ConfigTest extends TestCase
         ]);
 
         $this->assertSame(['max_uses' => 5], $config->non_defaults());
-    }
-
-    public function test_callback_returns_default_when_not_callable(): void
-    {
-        $config = new Config(['callbacks' => ['license_page_top' => 'not callable and not a function']]);
-
-        $this->assertSame('fallback', $config->callback('license_page_top', 'fallback'));
-    }
-
-    public function test_callback_returns_registered_callable(): void
-    {
-        $fn = static fn () => 'called';
-        $config = new Config(['callbacks' => ['license_page_top' => $fn]]);
-
-        $this->assertSame($fn, $config->callback('license_page_top'));
     }
 
     public function test_decode_encrypted_round_trip(): void

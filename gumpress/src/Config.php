@@ -80,9 +80,6 @@ final class Config
         // through Overrides (see Overrides::OVERRIDABLE's docblock).
         'white_label' => false,
 
-        // Callbacks: license_page_top, license_page_bottom.
-        'callbacks' => [],
-
         '_encrypted' => false,
     ];
 
@@ -102,17 +99,6 @@ final class Config
         return $this->data[$key] ?? $default;
     }
 
-    /**
-     * @param mixed $default
-     * @return callable|mixed
-     */
-    public function callback(string $key, $default = null)
-    {
-        $callback = $this->data['callbacks'][$key] ?? null;
-
-        return is_callable($callback) ? $callback : $default;
-    }
-
     public function all(): array
     {
         return $this->data;
@@ -123,15 +109,14 @@ final class Config
      * Engine::maybe_warn_unsealed_config() links into the configurator with,
      * so a developer who already has a working plain-array config gets it
      * pre-filled there instead of retyping everything. Excludes keys that
-     * either can't survive a query string ('callbacks' is a PHP closure map)
-     * or wouldn't help reproduce anything ('lock_config' is a list of keys
-     * to protect, not a value to carry over; 'configurator_url' pointing
-     * back at itself would be circular; '_encrypted'/'type'/'text_domain'
-     * aren't developer-facing options at all).
+     * wouldn't help reproduce anything ('lock_config' is a list of keys to
+     * protect, not a value to carry over; 'configurator_url' pointing back
+     * at itself would be circular; '_encrypted'/'type'/'text_domain' aren't
+     * developer-facing options at all).
      */
     public function non_defaults(): array
     {
-        $excluded = ['callbacks', 'lock_config', 'configurator_url', '_encrypted', 'type', 'text_domain'];
+        $excluded = ['lock_config', 'configurator_url', '_encrypted', 'type', 'text_domain'];
         $diff = [];
 
         foreach ($this->data as $key => $value) {

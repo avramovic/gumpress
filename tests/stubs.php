@@ -31,12 +31,18 @@ $GLOBALS['__gumpress_test_options'] = [];
 $GLOBALS['__gumpress_test_transients'] = [];
 $GLOBALS['__gumpress_test_salt'] = 'unit-test-salt';
 
+// Real hook registry (not a no-op) — needed now that Admin.php's license
+// page fires actual do_action()/apply_filters() calls that tests assert
+// against. $tag => $priority => list of ['cb' => callable, 'args' => int].
+$GLOBALS['__gumpress_test_hooks'] = [];
+
 function gumpress_test_reset_store(): void
 {
     $GLOBALS['__gumpress_test_options'] = [];
     $GLOBALS['__gumpress_test_transients'] = [];
     $GLOBALS['__gumpress_test_cron'] = [];
     $GLOBALS['__gumpress_test_salt'] = 'unit-test-salt';
+    $GLOBALS['__gumpress_test_hooks'] = [];
 }
 
 if (!function_exists('wp_salt')) {
@@ -131,6 +137,20 @@ if (!function_exists('esc_html')) {
     }
 }
 
+if (!function_exists('esc_attr')) {
+    function esc_attr($text)
+    {
+        return htmlspecialchars((string) $text, ENT_QUOTES);
+    }
+}
+
+if (!function_exists('esc_html__')) {
+    function esc_html__($text, $domain = null)
+    {
+        return esc_html(__($text, $domain));
+    }
+}
+
 if (!function_exists('esc_url')) {
     function esc_url($url)
     {
@@ -138,10 +158,104 @@ if (!function_exists('esc_url')) {
     }
 }
 
-if (!function_exists('add_action')) {
-    function add_action(...$args)
+if (!function_exists('wp_nonce_field')) {
+    function wp_nonce_field($action = -1, $name = '_wpnonce', $referer = true, $echo = true)
     {
+        $field = '<input type="hidden" name="' . esc_attr($name) . '" value="test-nonce">';
+        if ($echo) {
+            echo $field;
+        }
+
+        return $field;
+    }
+}
+
+if (!function_exists('submit_button')) {
+    function submit_button($text = null, $type = 'primary', $name = 'submit', $wrap = true, $other_attributes = null)
+    {
+        printf(
+            '<button type="submit" name="%s" class="button button-%s">%s</button>',
+            esc_attr($name),
+            esc_attr($type),
+            esc_html($text ?? 'Save Changes')
+        );
+    }
+}
+
+/**
+ * Real hook registry, not a no-op — Admin.php's license page fires actual
+ * do_action()/apply_filters() calls that tests assert against (see
+ * $GLOBALS['__gumpress_test_hooks'] above). ksort() mirrors WP core's
+ * priority ordering; array_slice($args, 0, $accepted_args) mirrors
+ * WP_Hook::apply_filters()'s accepted-args truncation, which is itself
+ * part of the contract AdminHooksTest pins (a filter/action declares how
+ * many args it accepts; extra args passed by do_action/apply_filters are
+ * silently dropped, never an error).
+ */
+if (!function_exists('add_action')) {
+    function add_action($tag, $callback, $priority = 10, $accepted_args = 1)
+    {
+        $GLOBALS['__gumpress_test_hooks'][$tag][$priority][] = ['cb' => $callback, 'args' => $accepted_args];
+
         return true;
+    }
+}
+
+if (!function_exists('add_filter')) {
+    function add_filter($tag, $callback, $priority = 10, $accepted_args = 1)
+    {
+        return add_action($tag, $callback, $priority, $accepted_args);
+    }
+}
+
+if (!function_exists('do_action')) {
+    function do_action($tag, ...$args)
+    {
+        $hooks = $GLOBALS['__gumpress_test_hooks'][$tag] ?? [];
+        ksort($hooks);
+
+        foreach ($hooks as $callbacks) {
+            foreach ($callbacks as $hook) {
+                call_user_func_array($hook['cb'], array_slice($args, 0, $hook['args']));
+            }
+        }
+    }
+}
+
+if (!function_exists('apply_filters')) {
+    function apply_filters($tag, $value, ...$args)
+    {
+        $hooks = $GLOBALS['__gumpress_test_hooks'][$tag] ?? [];
+        ksort($hooks);
+
+        $all_args = array_merge([$value], $args);
+        foreach ($hooks as $callbacks) {
+            foreach ($callbacks as $hook) {
+                $all_args[0] = call_user_func_array($hook['cb'], array_slice($all_args, 0, $hook['args']));
+            }
+        }
+
+        return $all_args[0];
+    }
+}
+
+if (!function_exists('has_action')) {
+    function has_action($tag, $callback = false)
+    {
+        $hooks = $GLOBALS['__gumpress_test_hooks'][$tag] ?? [];
+        if ($callback === false) {
+            return !empty($hooks);
+        }
+
+        foreach ($hooks as $priority => $callbacks) {
+            foreach ($callbacks as $hook) {
+                if ($hook['cb'] === $callback) {
+                    return $priority;
+                }
+            }
+        }
+
+        return false;
     }
 }
 

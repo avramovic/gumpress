@@ -215,13 +215,36 @@ final class Admin
         $domain = $module->text_domain();
         $status = $module->status();
         $license = $module->license();
+        $product = $module->product_id();
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html((string) $module->module_data('Name')) . ' &bull; ' . esc_html__('License', $domain) . '</h1>';
+        // Marks where WP core's own admin_notices relocate to (see
+        // common.js) when present. Without it, a notice fires before this
+        // point and everything a "top" hook below prints would sit above
+        // the (relocated) notice instead of below it.
+        echo '<hr class="wp-header-end">';
 
-        if ($top = $module->config()->callback('license_page_top')) {
-            call_user_func($top, $module);
-        }
+        // Hook names are deliberately string literals, not built from
+        // __NAMESPACE__: bin/build.php rewrites this file's namespace per
+        // release (GumPress\V2 -> GumPress\v2_0_0) via a literal text
+        // replace, so a name built from __NAMESPACE__ would itself get
+        // version-mangled and silently stop matching what integrators wrote
+        // in their own plugin. The global fires before the per-product one,
+        // matching WP core's own plugin_action_links / _{$file} pairing —
+        // that ordering is a documented guarantee, not an accident.
+        //
+        // Argument shape (product id only, never $module) is permanent too:
+        // arity can never grow on an already-shipped hook. Every bundled
+        // copy of GumPress on a site fires the SAME global hook name, so a
+        // second argument added in a later version would arity-mismatch
+        // against a callback an integrator registered against an older
+        // copy's contract -> ArgumentCountError. New hooks may always be
+        // added; an existing hook's signature may not change. See
+        // gumpress/README.md's Hooks section for the developer-facing
+        // contract this is protecting.
+        do_action('gumpress_license_page_top', $product);
+        do_action('gumpress_license_page_top_' . $product, $product);
 
         echo '<form method="post">';
         wp_nonce_field('gumpress_' . $module->product_id());
@@ -289,16 +312,22 @@ final class Admin
             }
         }
 
+        // Echo <tr> elements only — same shape as core's own
+        // manage_posts_custom_column. Deliberately not a filter over a rows
+        // array: today's status rows are eight inline self::row() calls,
+        // and restructuring those into a collection just to make them
+        // filterable is a separate change from this one.
+        do_action('gumpress_license_page_status_rows', $product);
+        do_action('gumpress_license_page_status_rows_' . $product, $product);
+
         echo '</table>';
 
         $permalink = $module->base_config()->get('permalink');
 
-        if ($bottom = $module->config()->callback('license_page_bottom')) {
-            call_user_func($bottom, $module);
-        } elseif (!$status->is_valid() && $permalink !== null) {
-            // No Buy link at all without a permalink — product_id is not a
-            // valid gumroad.com/l/... path, so there's nothing safe to link to.
-            printf(
+        // No Buy link at all without a permalink — product_id is not a
+        // valid gumroad.com/l/... path, so there's nothing safe to link to.
+        $buy = (!$status->is_valid() && $permalink !== null)
+            ? sprintf(
                 '<hr /><a class="button button-primary" href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
                 esc_url('https://gumroad.com/l/' . rawurlencode($permalink)),
                 esc_html(sprintf(
@@ -306,8 +335,29 @@ final class Admin
                     __('Buy %s', $domain),
                     (string) $module->module_data('Name')
                 ))
-            );
-        }
+            )
+            : '';
+
+        // Filter runs even when $buy is '' — lets an integrator add a Buy
+        // (or Upgrade) button for a product with no permalink configured,
+        // not just replace the default one.
+        $buy = apply_filters('gumpress_license_page_buy_button', $buy, $product);
+        $buy = apply_filters('gumpress_license_page_buy_button_' . $product, $buy, $product);
+
+        // apply_filters() is typed mixed — is_string() narrows rather than
+        // (string)-casting, because a filter returning an array would
+        // otherwise print the literal string "Array" (plus a warning) and
+        // an object without __toString() would fatal. No wp_kses_post()
+        // here: this filter's return value is PHP running in this same
+        // request behind Module::manage_capability() already — the same
+        // trust boundary Admin::footer_text() below already relies on
+        // (it also echoes raw, unescaped HTML into a WP hook). Sanitizing
+        // here would strip legitimate CTA markup (inline <style>, <svg>
+        // icons, data-* attributes) for no real security gain.
+        echo is_string($buy) ? $buy : '';
+
+        do_action('gumpress_license_page_bottom', $product);
+        do_action('gumpress_license_page_bottom_' . $product, $product);
 
         echo '</div>';
     }

@@ -16,10 +16,15 @@ require __DIR__ . '/../gumpress/src/Overrides.php';
 require __DIR__ . '/../gumpress/src/Engine.php';
 
 // Api/Module need more WP surface than the rest (options, transients,
-// multisite detection) — see the option store in stubs.php. Admin/Updater
-// stay out: they need the full admin/hook API and are still uncovered.
+// multisite detection) — see the option store in stubs.php.
 require __DIR__ . '/../gumpress/src/Api.php';
 require __DIR__ . '/../gumpress/src/Module.php';
+require __DIR__ . '/../gumpress/src/NullModule.php';
+
+// Admin needs the admin/hook API (add_action/do_action/apply_filters,
+// esc_attr/esc_html__, wp_nonce_field, submit_button) — all stubbed above.
+// Updater stays out: it needs a real HTTP layer and is still uncovered.
+require __DIR__ . '/../gumpress/src/Admin.php';
 
 // The sealing half of the "gp1" codec lives in the CLI tool, not in src/ —
 // Config is decode-only. Requiring it here lets ConfigTest round-trip the

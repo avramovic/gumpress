@@ -21,6 +21,11 @@ final class NullModule
         $this->product = $product;
     }
 
+    public function product_id(): string
+    {
+        return $this->product;
+    }
+
     public function valid(): bool
     {
         return false;

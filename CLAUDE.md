@@ -60,9 +60,13 @@ the whole class structure:
   `Module` (or a `NullModule` on any failure — see below). Every later bare static call
   (`GumPress::valid()`, etc.) is dispatched via `__callStatic`, which resolves the calling
   module from a `debug_backtrace()` walk matched against each `Module`'s `owned_dirs()`
-  (memoized per caller file in `resolve_caller()`). Code outside a module's own directory
-  (shared helpers, theme template overrides) must use the explicit `GumPress::for($product_id)`
-  escape hatch instead.
+  (memoized per caller file in `resolve_caller()`). Frame 0 of that backtrace is always the
+  call to `resolve_caller()` itself, made from `__callStatic()` inside `gumpress.php` — the
+  loop must skip any frame whose `file` is `__FILE__` before taking the first real one, or
+  every bare call resolves against wherever `gumpress.php` itself lives (silently correct on a
+  single-module site, silently wrong the moment a second one registers). Code outside a
+  module's own directory (shared helpers, theme template overrides) must use the explicit
+  `GumPress::for($product_id)` escape hatch instead.
 - **A licensing library must never fatal.** `NullModule` is the safe stand-in returned
   whenever registration or caller-resolution fails; it always reports not-licensed and
   swallows unknown method calls via `__call`, so a broken engine can never crash an unrelated
@@ -113,10 +117,10 @@ the whole class structure:
 6. `Overrides::apply()` — layers a verify response's `gumpress.config` object on top of the
    integrator's own config. Hard whitelist (`OVERRIDABLE` const) + the integrator's own
    `lock_config` opt-out + per-key type-checking/clamping in `sanitize()`. A fixed set of keys
-   (`license_check_url`, `proxy_fallback`, `type`, `text_domain`, `permalink`, `callbacks`,
-   `_encrypted`) can never be overridden regardless of whitelist/lock_config, because a
-   response that could rewrite `license_check_url` would be permanently unrecoverable and
-   would persist even while offline.
+   (`license_check_url`, `proxy_fallback`, `type`, `text_domain`, `permalink`, `_encrypted`)
+   can never be overridden regardless of whitelist/lock_config, because a response that could
+   rewrite `license_check_url` would be permanently unrecoverable and would persist even
+   while offline.
 7. `Status`/`Strings` — `Status` is a plain code + context value object, deliberately never
    holding a translated string (translating too early trips WP 6.7+'s early-translation-
    loading notice); `Strings::reason()` is the only place that calls `__()`/`_n()`, and only
@@ -124,13 +128,24 @@ the whole class structure:
 8. `Admin` / `Updater` — WordPress integration glue (settings page, admin notices, plugin
    list link, `plugins_api`/`themes_api` + update transient filters for a self-hosted
    `update_check_url`). All read/write via `Module`/`Api`/`Config`, never touch Gumroad
-   directly.
+   directly. The license page itself is the one place a developer can inject arbitrary
+   markup: `Admin::render_page()` fires `gumpress_license_page_top`/`_bottom`/`_status_rows`
+   actions and a `gumpress_license_page_buy_button` filter, each also in a `_{product_id}`-
+   suffixed form — see gumpress/README.md's Hooks section. These replaced GumPress 1.x/early-
+   2.x's `callbacks.license_page_top`/`license_page_bottom` config keys, which never belonged
+   in `Config` in the first place: a config value is meant to survive the `gp1` seal
+   (`json_encode` under AES), and a PHP closure structurally can't — `Config::non_defaults()`
+   had to special-case exclude it from the configurator round-trip for exactly that reason.
+   Hook argument shape (product id only, never a `Module` instance) and the global hooks'
+   arity are permanent once shipped — see the README section for why.
 
 **Testing**: `tests/bootstrap.php` loads `tests/stubs.php` (hand-rolled WordPress function
-stubs — no real WordPress or Gumroad account needed) plus the subset of `gumpress/src/*.php`
-that doesn't need a real `Module` (no `Admin`/`Api`/`Updater`/`Engine`'s `Module`-dependent
-path). Keep new pure-logic classes (state machines, value objects, codecs) testable this way;
-anything that needs a real `Module` instance is presently outside unit-test coverage.
+stubs, including a real `do_action`/`apply_filters`/`add_action`/`add_filter`/`has_action`
+hook registry — no real WordPress or Gumroad account needed) plus the subset of
+`gumpress/src/*.php` that doesn't need a real HTTP layer (`Admin`/`Api`/`Module`/`NullModule`
+are loaded; `Updater` stays out). Keep new pure-logic classes (state machines, value objects,
+codecs) testable this way; anything that needs a real HTTP layer is presently outside
+unit-test coverage.
 
 **`GumPress::for('id')` / `product_id`**: since GumPress 2.0, the second argument to
 `register()` is the Gumroad **product_id** (opaque dashboard string), not the permalink —

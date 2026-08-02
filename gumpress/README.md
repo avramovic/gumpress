@@ -47,8 +47,70 @@ set `type` explicitly only if you have an unusual layout.
 | `hide_custom_fields` | `false` | Don't show Gumroad checkout custom fields on the license page. |
 | `license_page_title` | module name + "License" | License settings page `<title>`. |
 | `license_page_menu` | module name + "License" | License settings page menu label. |
-| `callbacks.license_page_top` | — | `callable(Module $module): void`, rendered above the license form. |
-| `callbacks.license_page_bottom` | — | `callable(Module $module): void`, rendered below the status table (replaces the default "Buy" button). |
+
+## Hooks
+
+The license admin page fires plain WordPress hooks — register them the same
+way as any other `add_action`/`add_filter` call, any time after `register()`:
+
+```php
+$gumpress = GumPress::register(__FILE__, 'your-gumroad-product-id', $options);
+
+add_action('gumpress_license_page_bottom_' . $gumpress->product_id(), 'acme_license_cta');
+
+function acme_license_cta($product) {
+    if (GumPress::for($product)->has_tier('pro')) {
+        return;
+    }
+    printf(
+        '<hr><a class="button" href="%s">%s</a>',
+        esc_url('https://example.com/upgrade'),
+        esc_html__('Upgrade to Pro', 'acme')
+    );
+}
+```
+
+Suffixing the hook name with your own product id (kept in one place —
+`$gumpress->product_id()` — rather than retyped) is the recommended default:
+it's the only form that can never fire on a *different* GumPress-licensed
+product's license page, which matters the moment a WordPress install has more
+than one.
+
+| Hook | Type | Args | Fires |
+|---|---|---|---|
+| `gumpress_license_page_top` / `_{product_id}` | action | `$product_id` | Above the license-key form. |
+| `gumpress_license_page_status_rows` / `_{product_id}` | action | `$product_id` | Inside the status `<table>`, after GumPress's own rows — echo `<tr>...</tr>` elements only. |
+| `gumpress_license_page_buy_button` / `_{product_id}` | filter | `$html, $product_id` | Filters the "Buy" button's markup. `$html` is `''` unless the license is currently invalid *and* `permalink` is set — return your own markup to add a button even when it would otherwise be empty, or `''` to remove it. Runs even when `$html` is already `''`. |
+| `gumpress_license_page_bottom` / `_{product_id}` | action | `$product_id` | After the status table (and after the buy-button filter above). |
+
+Only the `_{product_id}`-suffixed hooks are shown in the example above; the
+unsuffixed (global) form of each fires first and is meant for an author who
+ships several licensed products and wants one callback across all of them —
+guard it yourself if you use it:
+
+```php
+add_action('gumpress_license_page_top', function ($product_id) {
+    if (!in_array($product_id, ACME_PRODUCT_IDS, true)) {
+        return; // not one of ours — don't render on someone else's license page.
+    }
+    // ...
+});
+```
+
+Every hook passes the product id only, never a `Module` instance — use
+`GumPress::for($product_id)` (or a bare `GumPress::valid()` etc. from inside
+the callback, since the module is already registered and booted by the time
+the license page renders) to read license state. `status()` and `license()`
+return objects whose class names change between builds (`bin/build.php`
+rewrites the internal namespace per release) — call their methods, never
+`instanceof` or type-hint them.
+
+Hook names and their argument count are permanent once shipped, in
+particular the unsuffixed/global hooks, which every bundled copy of GumPress
+on a site fires under the same name regardless of version — a future
+argument added to one of these would break any callback still registered
+with today's `add_action($hook, $cb, 10, 1)` arity. New hooks may be added in
+a later release; an existing one's signature won't change.
 
 ## Status codes
 
@@ -145,8 +207,8 @@ it's applied — a malformed override is simply ignored, never trusted
 verbatim.
 
 `license_check_url`, `proxy_fallback`, `type`, `text_domain`, `permalink`,
-`callbacks`, and the config-seal's own `_encrypted` flag can **never** be
-overridden, no matter what a response contains. A response that could
+and the config-seal's own `_encrypted` flag can **never** be overridden, no
+matter what a response contains. A response that could
 rewrite `license_check_url` would make one bad deploy permanently
 unrecoverable — and unlike everything else here, it would survive offline
 in the cached payload.

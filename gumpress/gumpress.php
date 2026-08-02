@@ -245,6 +245,17 @@ final class GumPress
      * registered module's owned directories. Memoized per caller file,
      * including misses, so the cost (a few microseconds) is paid once per
      * call site rather than once per call.
+     *
+     * Frame 0 is always the call to THIS method, from __callStatic() in
+     * THIS file — never the developer's own call site (that's frame 1 or
+     * later, e.g. shifted further by call_user_func/array_map wrappers).
+     * Skipping frames whose 'file' is this facade's own file is therefore
+     * not optional: without it, every bare GumPress::x() call resolves
+     * against wherever this file itself lives, which happens to prefix-
+     * match its own bundling module's owned_dirs() and so returns a
+     * plausible-looking but wrong answer on any site with more than one
+     * registered module — silently, and memoized for the rest of the
+     * request.
      */
     private static function resolve_caller(): ?string
     {
@@ -252,10 +263,11 @@ final class GumPress
 
         $file = null;
         foreach ($trace as $frame) {
-            if (!empty($frame['file'])) {
-                $file = $frame['file'];
-                break;
+            if (empty($frame['file']) || $frame['file'] === __FILE__) {
+                continue;
             }
+            $file = $frame['file'];
+            break;
         }
 
         if ($file === null) {

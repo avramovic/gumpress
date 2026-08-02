@@ -43,7 +43,7 @@ production.
    // after
    require_once __DIR__ . '/gumpress/gumpress.php';
    GumPress::register(__FILE__, 'YOUR_GUMROAD_PRODUCT_ID', [
-       'permalink' => 'your-gumroad-permalink', // optional — Buy link + license page URL slug
+       'permalink' => 'your-gumroad-permalink', // optional — Buy link only
    ]);
    ```
 

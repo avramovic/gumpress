@@ -420,19 +420,28 @@ final class Module
     }
 
     /**
-     * `$this->product` is now a Gumroad product_id — an opaque, often
-     * base64-looking string that isn't guaranteed URL/slug-safe (it can
-     * contain characters like `/`, `+`, `=`). The optional `permalink`
-     * config option, when set, keeps this human-readable and stable
-     * (`?page=gumpress-acme-pro`, exactly as before this option existed);
-     * otherwise fall back to a short hash of the product_id — still stable
-     * per-product, always URL-safe, just not pretty until `permalink` is set.
+     * Deliberately tracks the plugin/theme's own folder — not the optional
+     * `permalink` config option, which is Gumroad-facing (Buy link) only and
+     * has nothing to do with WordPress. Using the folder means the license
+     * page URL is human-readable and stable from the moment a module first
+     * registers, and never moves just because an integrator adds, edits, or
+     * removes `permalink` later. `$this->product` is a Gumroad product_id —
+     * an opaque, often base64-looking string that isn't guaranteed
+     * URL/slug-safe (it can contain characters like `/`, `+`, `=`) — so it
+     * only survives as a last-resort fallback below, for the degenerate case
+     * where the folder name itself sanitizes to nothing (e.g. a single-file
+     * plugin with no containing directory of its own).
      */
     public function page_slug(): string
     {
-        $permalink = $this->base_config->get('permalink');
+        return $this->page_slug_base() . '-license';
+    }
 
-        return 'gumpress-' . ($permalink ?? substr(hash('sha256', $this->product), 0, 16));
+    private function page_slug_base(): string
+    {
+        $base = trim(strtolower((string) preg_replace('/[^A-Za-z0-9_-]+/', '-', basename($this->slug()))), '-');
+
+        return $base !== '' ? $base : 'gumpress-' . substr(hash('sha256', $this->product), 0, 16);
     }
 
     public function manage_capability(): string

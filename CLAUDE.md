@@ -135,7 +135,11 @@ the whole class structure:
 8. `Admin` / `Updater` — WordPress integration glue (settings page, admin notices, plugin
    list link, `plugins_api`/`themes_api` + update transient filters for a self-hosted
    `update_check_url`). All read/write via `Module`/`Api`/`Config`, never touch Gumroad
-   directly. The license page itself is the one place a developer can inject arbitrary
+   directly. The license page's own `?page=` slug (`Module::page_slug()`) is always derived
+   from the plugin/theme's own folder, independent of the optional `permalink` config option
+   — which is Gumroad-facing only (see the `product_id` note below) — so the URL is
+   human-readable from first registration and never moves when `permalink` is added, edited,
+   or removed. The license page itself is the one place a developer can inject arbitrary
    markup: `Admin::render_page()` fires `gumpress_license_page_top`/`_bottom`/`_status_rows`
    actions and a `gumpress_license_page_buy_button` filter, each also in a `_{product_id}`-
    suffixed form — see gumpress/README.md's Hooks section. These replaced GumPress 1.x/early-
@@ -157,7 +161,9 @@ unit-test coverage.
 **`GumPress::for('id')` / `product_id`**: since GumPress 2.0, the second argument to
 `register()` is the Gumroad **product_id** (opaque dashboard string), not the permalink —
 Gumroad's real verify API requires `product_id` for products created on/after Jan 9, 2023.
-The permalink is now a separate, purely cosmetic `permalink` option (Buy link + license page
-URL slug only) and is never sent to any verify/update endpoint. `bin/encrypt.php` seals under
+The permalink is now a separate, purely cosmetic `permalink` option (Buy link only) and is
+never sent to any verify/update endpoint. It has no bearing on the license page's own URL —
+that slug is always derived from the plugin/theme's own folder, via `Module::page_slug()`,
+whether or not `permalink` is set (`?page={folder}-license`). `bin/encrypt.php` seals under
 the product_id, and it must match whatever `register()` is called with for
 `Config::decode_encrypted()`'s key derivation to succeed.

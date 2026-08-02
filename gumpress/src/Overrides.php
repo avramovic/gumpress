@@ -20,7 +20,7 @@ namespace GumPress\V2;
  * `lock_config` opt-out, and type-cast / clamped to a sane range before
  * being trusted — a malformed or hostile override must never reach Config
  * verbatim. `license_check_url`, `proxy_fallback`, `type`, `text_domain`,
- * and `_encrypted` are never overridable: a response that could rewrite
+ * `permalink`, and `_encrypted` are never overridable: a response that could rewrite
  * `license_check_url` would make one bad deploy permanently unrecoverable,
  * and — unlike everything else here — it would survive offline in the
  * cached payload.

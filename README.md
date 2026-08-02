@@ -13,8 +13,8 @@ first — this is a clean break, not a compatible upgrade.
 - **`register()`'s 2nd argument is now your Gumroad product_id**, not the
   permalink — Gumroad's real verify API requires `product_id` for any
   product created on or after Jan 9, 2023. The permalink becomes an
-  optional, purely cosmetic `permalink` setting (Buy link, license page URL
-  slug) — see [gumpress/README.md](gumpress/README.md#registration).
+  optional, purely cosmetic `permalink` setting (Buy link only) — see
+  [gumpress/README.md](gumpress/README.md#registration).
 - **Subscriptions are properly supported**: grace periods, cancellation that
   stays valid through the paid period, tiers parsed from Gumroad's
   `variants`, and Gumroad checkout custom fields.

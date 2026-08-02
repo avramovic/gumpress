@@ -27,10 +27,11 @@ final class Config
         // The human-readable Gumroad permalink (the part of the product's
         // public gum.co/... or gumroad.com/l/... URL), entirely separate
         // from the product_id passed as register()'s 2nd argument. Purely
-        // cosmetic: used for the license page's "Buy" link and its own URL
-        // slug (see Module::page_slug()). When unset, the Buy link is
-        // hidden (a product_id is not a valid gumroad.com/l/... path) and
-        // the page slug falls back to a short hash of the product_id.
+        // cosmetic, and Gumroad-facing only: powers the license page's "Buy"
+        // link and nothing else. When unset, the Buy link is hidden (a
+        // product_id is not a valid gumroad.com/l/... path). The license
+        // page's own URL slug is unrelated — it's derived from the plugin/
+        // theme's own folder, not from this option (see Module::page_slug()).
         'permalink' => null,
 
         // License validity

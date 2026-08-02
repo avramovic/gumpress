@@ -38,7 +38,7 @@ set `type` explicitly only if you have an unusual layout.
 | `offline_grace` | `14` | Days a previously-valid license stays valid while the license server is unreachable. |
 | `offline_policy` | `'grace'` | `'grace'` (above), `'closed'` (never grant offline grace), or `'open'` (always valid when unreachable). |
 | `update_check_url` | `null` | Your self-hosted update server. When unset, no updater is registered. |
-| `permalink` | `null` | Your product's human-readable Gumroad permalink (`gum.co/...` or `yourname.gumroad.com/l/...`) — cosmetic only, never sent for verification. Powers the license page's "Buy" link (hidden without it — a product_id isn't a valid purchase URL) and the license page's own URL slug (`?page=gumpress-{permalink}`; without it, a short hash of your product_id instead). |
+| `permalink` | `null` | Your product's human-readable Gumroad permalink (`gum.co/...` or `yourname.gumroad.com/l/...`) — cosmetic only, never sent for verification. Powers the license page's "Buy" link only (hidden without it — a product_id isn't a valid purchase URL). Does **not** affect the license page's own URL, which is always `?page={your-plugin-or-theme-folder}-license` regardless of whether `permalink` is set. |
 | `lock_config` | `[]` | List of option keys your own `license_check_url` server is never allowed to override, even if it tries — see [Server-controlled overrides](#server-controlled-overrides). |
 | `configurator_url` | GumPress's own configurator | Where the non-production unsealed-config notice links to — see [Sealing your config](#sealing-your-config). |
 | `plugins_page_link` | `true` | Add a "License" link on the Plugins list row. |

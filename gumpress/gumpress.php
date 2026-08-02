@@ -5,7 +5,7 @@
  * Usage (the only place your product id appears):
  *
  *     require_once __DIR__ . '/gumpress/gumpress.php';
- *     GumPress::register(__FILE__, 'your-gumroad-permalink', $options);
+ *     GumPress::register(__FILE__, 'your-gumroad-product-id', $options);
  *
  * Everywhere else in your module:
  *

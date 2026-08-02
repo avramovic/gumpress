@@ -6,12 +6,18 @@ GumPress 2.0 is a clean break, not a compatible upgrade. There is no shim for
 ## Why
 
 1.x's call syntax repeated the product ID at every check, several of its
-default behaviours were actively harmful (a default `max_uses => 1` that
-invalidates a customer's production license the moment they clone to
-staging; a validity check that made refunds and subscription states
-unreachable dead code), and it has PHP 8 fatals in the subscription grace
-path. Patching all of that onto the 1.x shape wasn't worth it — see the
-project README for the full rewrite rationale.
+default behaviours were actively harmful (seat limiting was checked *first*,
+with a truthy default, making every check below it — refund, dispute, every
+subscription state — unreachable dead code; and activation counting had no
+per-(key, site) de-duplication and no non-production exemption, so cloning to
+staging or restoring a backup permanently burned a seat with no way to
+release it), and it has PHP 8 fatals in the subscription grace path. Patching
+all of that onto the 1.x shape wasn't worth it — see the project README for
+the full rewrite rationale. 2.0 still defaults `max_uses` to a non-zero
+value, but only after fixing both of those: seat limiting is evaluated last
+(see `gumpress/src/Validator.php`'s docblock), and `Api::should_increment()`
+de-dupes by license key + host and skips anything that doesn't look like
+production.
 
 ## What to change
 
@@ -58,7 +64,6 @@ project README for the full rewrite rationale.
    | 1.x | 2.0 |
    |---|---|
    | `grace_period` | `payment_grace` |
-   | `max_uses` defaulted to `1` | defaults to `0` (disabled) — see the seat-limiting section in `gumpress/README.md` before turning it back on |
    | `cache_time` (accepted but ignored) | removed; caching is now handled internally with sane, non-configurable TTLs |
    | — | `offline_grace` / `offline_policy` (new: previously-valid licenses survive a license-server outage) |
    | — | `lock_config` / `configurator_url` (new — see [Server-controlled overrides](gumpress/README.md#server-controlled-overrides)) |
@@ -73,7 +78,24 @@ project README for the full rewrite rationale.
    was relying on the old format; if you were, re-seal your config before
    upgrading.
 
-6. **If you ship an update server**, its response for a **theme** must now be
+6. **If you pass `$options` as a plain array** (not a sealed `bin/encrypt.php`
+   string), be aware of two behavior changes that land together on upgrade:
+   - `max_uses` now defaults to `1` instead of `0` — see [Seat
+     limiting](gumpress/README.md#seat-limiting). If any of your customers'
+     Gumroad `uses` counters have already drifted above `1` (a clone, a
+     restore, a domain migration), they will be hard-blocked
+     (`Status::SEAT_LIMIT`) the moment they upgrade to this version, with no
+     grace period. Set `'max_uses' => 0` before releasing if that's a risk
+     for your install base.
+   - A **production** site now silently discards a non-default plain-array
+     config down to its `type`/`text_domain`/`permalink` keys — see [Sealing
+     your config](gumpress/README.md#sealing-your-config). If you're shipping
+     a plain array with a real `license_check_url`/`update_check_url`/seat
+     configuration, your customers' sites will start ignoring it entirely on
+     upgrade, with only an `error_log()` line as a trace. Seal your config
+     with `bin/encrypt.php` before releasing this version.
+
+7. **If you ship an update server**, its response for a **theme** must now be
    the plain decoded array WordPress's `themes_api` filter expects directly
    (1.x silently returned `null` here due to a bug — theme self-updates never
    actually worked). Plugin responses now read `package` first, falling back

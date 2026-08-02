@@ -290,7 +290,7 @@ final class Admin
                     esc_html((string) ($server_seats['used'] ?? $license->uses())) . ' / ' . $limit
                 );
             } else {
-                $max = (int) $module->config()->get('max_uses', 0);
+                $max = (int) $module->config()->get('max_uses');
                 if ($max > 0) {
                     self::row(
                         esc_html__('Activations', $domain),

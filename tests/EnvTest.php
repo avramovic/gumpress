@@ -88,7 +88,7 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(new Config(['max_uses' => 1]), 'acme-plugin');
+        Engine::enforce_seal_policy(new Config(['max_uses' => 5]), 'acme-plugin');
 
         $queued = Notices::queued_for_tests();
         $this->assertCount(1, $queued);
@@ -101,8 +101,8 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(
-            new Config(['max_uses' => 1]),
+        Engine::enforce_seal_policy(
+            new Config(['max_uses' => 5]),
             'acme-plugin',
             __DIR__ . '/fixtures/acme-plugin/acme-plugin.php'
         );
@@ -119,8 +119,8 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(
-            new Config(['max_uses' => 1]),
+        Engine::enforce_seal_policy(
+            new Config(['max_uses' => 5]),
             'acme-plugin',
             __DIR__ . '/fixtures/no-name-plugin/no-name-plugin.php'
         );
@@ -133,7 +133,7 @@ final class EnvTest extends TestCase
 
     public function test_unsealed_config_stays_silent_in_production(): void
     {
-        Engine::maybe_warn_unsealed_config(new Config([]), 'acme-plugin');
+        Engine::enforce_seal_policy(new Config([]), 'acme-plugin');
 
         $this->assertCount(0, Notices::queued_for_tests());
     }
@@ -142,7 +142,7 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(new Config(['_encrypted' => true]), 'acme-plugin');
+        Engine::enforce_seal_policy(new Config(['_encrypted' => true]), 'acme-plugin');
 
         $this->assertCount(0, Notices::queued_for_tests());
     }
@@ -151,7 +151,7 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(
+        Engine::enforce_seal_policy(
             new Config(['configurator_url' => 'https://example.com/my-configurator']),
             'acme-plugin'
         );
@@ -166,7 +166,7 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(new Config([]), 'acme-plugin');
+        Engine::enforce_seal_policy(new Config([]), 'acme-plugin');
 
         $this->assertCount(0, Notices::queued_for_tests());
     }
@@ -175,7 +175,7 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(new Config(['payment_grace' => 7]), 'acme-plugin');
+        Engine::enforce_seal_policy(new Config(['payment_grace' => 7]), 'acme-plugin');
 
         $this->assertCount(0, Notices::queued_for_tests());
     }
@@ -190,7 +190,7 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(
+        Engine::enforce_seal_policy(
             new Config(['max_uses' => 5, 'disallow_test_keys' => true, 'payment_grace' => 7]),
             'acme-plugin'
         );
@@ -209,7 +209,7 @@ final class EnvTest extends TestCase
     {
         $GLOBALS['__gumpress_test_env_type'] = 'staging';
 
-        Engine::maybe_warn_unsealed_config(
+        Engine::enforce_seal_policy(
             new Config(['max_uses' => 5, 'lock_config' => ['max_uses']]),
             'acme-plugin'
         );

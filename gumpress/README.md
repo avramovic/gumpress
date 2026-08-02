@@ -16,7 +16,9 @@ GumPress::register(__FILE__, 'your-gumroad-product-id', $options);
   or after **January 9, 2023** — see the `permalink` option below if you
   still need the permalink for anything.
 - `$options` is either the array below, or a string produced by `bin/encrypt.php`
-  (see [Obfuscating your config](#obfuscating-your-config)).
+  (see [Sealing your config](#sealing-your-config)). **The array form is for
+  development only** — in production, a non-default plain array is ignored
+  wholesale and GumPress runs on its own defaults instead.
 
 Type (`plugin` vs `theme`) is auto-detected from where `__FILE__` lives;
 set `type` explicitly only if you have an unusual layout.
@@ -29,7 +31,7 @@ set `type` explicitly only if you have an unusual layout.
 | `text_domain` | your module's slug | Text domain used to translate GumPress's own UI strings. |
 | `disallow_test_keys` | `false` | Reject Gumroad test-mode purchases. |
 | `payment_grace` | `7` | Days a subscription stays valid after a failed payment. |
-| `max_uses` | `0` (disabled) | Seat limit. **Read this before changing it** — see [Seat limiting](#seat-limiting). |
+| `max_uses` | `1` | Seat limit. **Read this before changing it** — see [Seat limiting](#seat-limiting). |
 | `max_uses_policy` | `'block'` | `'block'` invalidates the license when over the limit; `'warn'` only shows a notice. |
 | `license_check_url` | Gumroad's API | Point this at your own proxy to add server-side seat enforcement, custom entitlements, etc. |
 | `proxy_fallback` | `false` | If your custom `license_check_url` is unreachable, fall back to Gumroad directly. Off by default because a proxy is usually doing enforcement Gumroad-direct can't. |
@@ -38,7 +40,7 @@ set `type` explicitly only if you have an unusual layout.
 | `update_check_url` | `null` | Your self-hosted update server. When unset, no updater is registered. |
 | `permalink` | `null` | Your product's human-readable Gumroad permalink (`gum.co/...` or `yourname.gumroad.com/l/...`) — cosmetic only, never sent for verification. Powers the license page's "Buy" link (hidden without it — a product_id isn't a valid purchase URL) and the license page's own URL slug (`?page=gumpress-{permalink}`; without it, a short hash of your product_id instead). |
 | `lock_config` | `[]` | List of option keys your own `license_check_url` server is never allowed to override, even if it tries — see [Server-controlled overrides](#server-controlled-overrides). |
-| `configurator_url` | GumPress's own configurator | Where the non-production unsealed-config notice links to — see [Obfuscating your config](#obfuscating-your-config). |
+| `configurator_url` | GumPress's own configurator | Where the non-production unsealed-config notice links to — see [Sealing your config](#sealing-your-config). |
 | `plugins_page_link` | `true` | Add a "License" link on the Plugins list row. |
 | `hide_menu_page` | `false` | Don't show a Settings/Appearance menu item for the license page. The page stays reachable at its URL — useful with several GumPress modules on one site, where `plugins_page_link` already gives each one a "License" link on its Plugins list row. |
 | `suppress_notices` | `false` | Disable all admin notices. |
@@ -130,7 +132,7 @@ outside — `status()` returns a `Status` object) is one of:
 | `cancelled_pending_end` | **yes** | Cancelled, but the customer already paid through the current period. |
 | `payment_failed_grace` | **yes** | A subscription payment failed; still inside `payment_grace`. |
 | `payment_failed` | no | Payment failed and the grace period elapsed. |
-| `seat_limit` | depends on `max_uses_policy` | Over the configured `max_uses`. |
+| `seat_limit` | depends on `max_uses_policy` | Over `max_uses` (on by default — see [Seat limiting](#seat-limiting)). |
 | `valid` | yes | Everything checks out. |
 | `unknown` | no | Not a licensing verdict — GumPress couldn't tell which module a bare static call belonged to. Use `GumPress::for($id)` instead. |
 
@@ -140,21 +142,27 @@ above are what actually decides access.
 
 ## Seat limiting
 
-Gumroad's `uses` field on a license counts **verification calls**, not active
-installs — it never decrements, and there's no way to release a seat without
-a seller access token (which a distributed plugin can't hold). `max_uses`
-defaults to **disabled** (`0`) because a naive seat count breaks real
-workflows: cloning production to staging, restoring a database backup, or a
-`search-replace` on the domain all look like a "new site" and would push
-`uses` past the limit — locking out a paying customer. If you do set a limit,
-being over it invalidates the license by default (`max_uses_policy` is
-`'block'`) — set it to `'warn'` if you'd rather just show a notice.
+`max_uses` defaults to `1`, checked with `max_uses_policy` of `'block'` — one
+license key activates one site. This is enforced against Gumroad's `uses`
+field, which counts **verification calls**, not active installs: it never
+decrements, and there's no way to release a seat without a seller access
+token (which a distributed plugin can't hold). Two things make a non-zero
+default survivable rather than a support-ticket generator:
 
-GumPress avoids re-incrementing for the same (license key, site) pair, and
-never increments outside of what looks like a production environment
-(`wp_get_environment_type()`, `.local`/`.test` hosts, `dev./staging./stage.`
-subdomains, RFC1918 addresses, WP-CLI). But none of that survives a fresh
-database. If you need real seat enforcement, do it in a self-hosted
+- GumPress avoids re-incrementing for the same (license key, site) pair, and
+  never increments outside of what looks like a production environment
+  (`wp_get_environment_type()`, `.local`/`.test` hosts, `dev./staging./stage.`
+  subdomains, RFC1918 addresses, WP-CLI) — see [Server-controlled
+  overrides](#server-controlled-overrides) for the mechanics.
+- A proxy reporting its own seat model (`gumpress.seats`, below) takes over
+  entirely and the local `max_uses` check never runs.
+
+But none of that survives a fresh database: cloning production to staging,
+restoring a backup, or a `search-replace` on the domain can all look like a
+"new site" to Gumroad and push `uses` past `1`. If that's a real risk for
+your customers, set `'max_uses' => 0` to disable the check outright, or
+`'max_uses_policy' => 'warn'` to show a notice instead of invalidating the
+license. For real seat enforcement across sites, do it in a self-hosted
 `license_check_url` proxy that holds your Gumroad seller token and tracks
 seats server-side — `max_uses` against Gumroad directly is advisory only.
 `uses` on the response then means *your* proxy's active-seat count, not
@@ -324,13 +332,13 @@ GumPress::extra('seats_max');
 GumPress::extra();
 ```
 
-## Obfuscating your config
+## Sealing your config
 
 `bin/encrypt.php` in the GumPress repo turns a config array into a sealed
 `gp1` string you can pass as `$options` instead of a plain array:
 
 ```
-composer encrypt your-gumroad-product-id '{"max_uses": 0, "update_check_url": "https://example.com/updates"}'
+composer encrypt your-gumroad-product-id '{"max_uses": 3, "update_check_url": "https://example.com/updates"}'
 ```
 
 (or `php bin/encrypt.php ...` directly, without Composer)
@@ -343,19 +351,31 @@ This is tamper-*evidence*, not real security: the key derives only from your
 Gumroad product_id, which ships in plaintext inside the plugin itself, so
 anyone willing to read `gumpress/src/Config.php` and write a script can still
 forge a blob. What it buys you is that the config is no longer readable at
-rest (it's AES-256-CBC + HMAC-SHA256, not base64+rot13) and casual editing —
-a customer's host provider changing `license_check_url` with a text
-editor — no longer works.
+rest (it's AES-256-CBC + HMAC-SHA256, not base64+rot13), and that a plain
+array — whether left in place by mistake or swapped in on purpose to strip
+your settings — simply doesn't work in production anymore.
 
-**If you skip this**, GumPress will show an admin notice with a link to the
-configurator, but *only* outside of production
-(`wp_get_environment_type()`, local/staging hosts, WP-CLI), and only once
-you've actually set an option — a bare `register($file, $product)` with no
-`$options` (or one that only restates a default) has nothing to seal, so it
-stays quiet. A real customer's site never sees it either way — it's a
-build-time reminder aimed at you, the developer, not a runtime warning aimed
-at your customers, and it fires regardless of `suppress_notices` for exactly
-that reason.
+**Sealing is mandatory before you ship, not optional obfuscation.** A plain
+array is a development/testing affordance only:
+
+- **Outside production**, a non-default plain array still applies, and
+  GumPress shows an admin notice with a link to the configurator — unless
+  you've only set options that restate their own defaults, or set none at
+  all, in which case there's nothing to seal and it stays quiet. This notice
+  fires regardless of `suppress_notices`, since it's aimed at you, the
+  developer, not your customers.
+- **In production**, that same non-default plain array is discarded
+  wholesale: everything except the `type`/`text_domain`/`permalink` identity
+  keys reverts to GumPress's own defaults — including `license_check_url`,
+  which silently starts pointing at Gumroad directly instead of your proxy.
+  No admin notice; a real customer's dashboard must never carry a build-time
+  warning. A line goes to `error_log()` instead, so a forgotten seal is at
+  least diagnosable from your host's error log rather than an unfalsifiable
+  support ticket.
+
+A bare `register($file, $product)` — or one whose options only restate
+GumPress's defaults — is unaffected either way; there's nothing in it worth
+sealing.
 
 ## What GumPress stores, and what's encrypted
 

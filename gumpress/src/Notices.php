@@ -9,6 +9,11 @@ namespace GumPress\V2;
  * encrypted config, engine init failures, the non-production unsealed-config
  * warning, a server-supplied update-check notice) that aren't tied to a
  * specific, already-constructed Module. Never fatals, never throws.
+ *
+ * Production's unsealed-config fallback (Engine::enforce_seal_policy()) is
+ * the one exception that deliberately does NOT go through this queue — it
+ * logs via error_log() instead, since a customer's dashboard must never
+ * carry a warning aimed at the developer who forgot to seal.
  */
 final class Notices
 {

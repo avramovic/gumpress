@@ -28,7 +28,7 @@ first — this is a clean break, not a compatible upgrade.
   old CRC32 scheme, whose checksum could render as anywhere from 1 to 8 hex
   characters while the decoder always read 8 — silently corrupting roughly
   1 in 16 generated configs. Still tamper-*evidence*, not real security —
-  see [Obfuscating your config](gumpress/README.md#obfuscating-your-config).
+  see [Sealing your config](gumpress/README.md#sealing-your-config).
 - **Distributed as a `gumpress/` folder**, not a single file — several
   plugins/themes on one site can each bundle their own copy, at different
   versions, without conflicting. A single-file build is still produced for

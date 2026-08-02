@@ -36,8 +36,9 @@ final class Config
         // License validity
         'disallow_test_keys' => false,
         'payment_grace' => 7, // days a failed subscription payment stays valid.
-        'max_uses' => 0, // 0 disables seat limiting entirely (see README: Gumroad's
-                         // `uses` counts verifications, not seats, and can't be decremented).
+        'max_uses' => 1, // one activation by default — see README: Seat limiting for why this
+                         // is survivable despite Gumroad's `uses` counting verifications (not
+                         // seats) and never decrementing. Set to 0 to disable seat limiting.
         'max_uses_policy' => 'block', // 'block' (invalidate) | 'warn' (show a notice).
 
         // Network / caching / offline behaviour
@@ -55,7 +56,7 @@ final class Config
         'lock_config' => [],
 
         // Points the non-production unsealed-config admin notice (see
-        // Engine::maybe_warn_unsealed_config()) somewhere other than the
+        // Engine::enforce_seal_policy()) somewhere other than the
         // default configurator, for anyone self-hosting one.
         'configurator_url' => null,
 
@@ -106,7 +107,7 @@ final class Config
 
     /**
      * Every option that differs from DEFAULTS — what
-     * Engine::maybe_warn_unsealed_config() links into the configurator with,
+     * Engine::enforce_seal_policy() links into the configurator with,
      * so a developer who already has a working plain-array config gets it
      * pre-filled there instead of retyping everything. Excludes keys that
      * wouldn't help reproduce anything ('lock_config' is a list of keys to

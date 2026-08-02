@@ -13,7 +13,7 @@ final class ConfigTest extends TestCase
     {
         $config = new Config();
 
-        $this->assertSame(0, $config->get('max_uses'));
+        $this->assertSame(1, $config->get('max_uses'));
         $this->assertSame('block', $config->get('max_uses_policy'));
         $this->assertSame(7, $config->get('payment_grace'));
         $this->assertSame(14, $config->get('offline_grace'));

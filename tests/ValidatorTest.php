@@ -120,9 +120,11 @@ final class ValidatorTest extends TestCase
     }
 
     /**
-     * The central regression test: v1's `elseif ($max = max_uses)` cascade,
-     * with a truthy default of 1, made refunds and every subscription state
-     * unreachable dead code. Refund must win even when max_uses is set.
+     * The central regression test: v1's `elseif ($max = max_uses)` cascade —
+     * checked first, with max_uses defaulting truthy — made refunds and
+     * every subscription state unreachable dead code. Refund must win even
+     * when max_uses is set (2.0 still defaults it non-zero, but only after
+     * moving the check last).
      */
     public function test_refund_is_checked_even_when_max_uses_configured(): void
     {
@@ -214,10 +216,20 @@ final class ValidatorTest extends TestCase
         $this->assertFalse($block->is_valid());
     }
 
-    public function test_seat_limit_disabled_by_default(): void
+    public function test_seat_limit_applies_by_default(): void
     {
         $license = self::load('valid-subscription'); // uses: 3, no max_uses configured
+
         $status = Validator::evaluate($license, true, null, new Config());
+
+        $this->assertSame(Status::SEAT_LIMIT, $status->code());
+    }
+
+    public function test_seat_limit_disabled_when_max_uses_is_zero(): void
+    {
+        $license = self::load('valid-subscription'); // uses: 3
+
+        $status = Validator::evaluate($license, true, null, new Config(['max_uses' => 0]));
 
         $this->assertSame(Status::VALID, $status->code());
     }
@@ -238,7 +250,9 @@ final class ValidatorTest extends TestCase
     public function test_server_override_can_tighten_the_seat_limit(): void
     {
         $license = self::load('valid-subscription'); // uses: 3
-        $effective = Overrides::apply(new Config(), ['max_uses' => 1, 'max_uses_policy' => 'block']);
+        // Base starts disabled (max_uses => 0) so the override is the only
+        // thing doing the tightening, not the compiled-in default.
+        $effective = Overrides::apply(new Config(['max_uses' => 0]), ['max_uses' => 1, 'max_uses_policy' => 'block']);
 
         $status = Validator::evaluate($license, true, null, $effective);
 

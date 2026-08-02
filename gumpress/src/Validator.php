@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace GumPress\V2;
 
 /**
- * The validity state machine. v1 used an if/elseif cascade where the
- * `max_uses` branch defaulted to a truthy `1`, making every check below it
+ * The validity state machine. v1 used an if/elseif cascade with `max_uses`
+ * checked *first* and a truthy default, making every check below it
  * (refund, dispute, every subscription state) unreachable dead code — so
- * refunded and cancelled customers kept working forever. This is ordered,
- * independent guard clauses instead, with seat limiting evaluated last and
- * only when explicitly enabled, so it can never mask the checks above it.
+ * refunded and cancelled customers kept working forever, and every clone or
+ * staging copy burned a permanent seat with no way to release it. This is
+ * ordered, independent guard clauses instead, with seat limiting evaluated
+ * last — 2.0 still defaults max_uses to a non-zero value, but only after
+ * fixing the ordering (so it can never mask the checks above it) and the
+ * activation accounting (Api::should_increment() de-dupes by license key +
+ * host and skips non-production entirely) that made the old default unsafe.
  *
  * Gumroad's `success: true` does not mean "entitled" — it returns success
  * for refunded, disputed, and ended subscriptions alike. This evaluation
@@ -73,7 +77,7 @@ final class Validator
         // default_seat_limit, a per-license override, etc.), so the shim's
         // own cap must stand down rather than second-guess it.
         if (!$license->has_server_seats()) {
-            $max = (int) $config->get('max_uses', 0);
+            $max = (int) $config->get('max_uses');
             if ($max > 0 && $license->uses() > $max && $config->get('max_uses_policy', 'block') === 'block') {
                 return new Status(Status::SEAT_LIMIT, ['uses' => $license->uses(), 'max' => $max]);
             }
@@ -97,7 +101,7 @@ final class Validator
             return false;
         }
 
-        $max = (int) $config->get('max_uses', 0);
+        $max = (int) $config->get('max_uses');
 
         return $max > 0 && $license->uses() > $max;
     }

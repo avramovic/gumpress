@@ -75,12 +75,19 @@ the whole class structure:
 **Request flow through the engine, in dependency order** (mirrors `src/load.php`):
 
 1. `Engine::create()` — decodes an encrypted config blob if `register()` was passed a sealed
-   string (see `Config::decode_encrypted`), builds a `Config`, warns (once, non-production
-   only) if the config is unsealed and non-default, then builds the `Module`. Bootstrap-level
-   notices (this one, plus the frozen facade's own registration-failure notices in
-   `gumpress.php`) identify the module by its plugin/theme name — via `Module::label()`, a
-   static header read that works from a bare file path before any `Module` exists — falling
-   back to the raw product_id only when the header can't be read.
+   string (see `Config::decode_encrypted`), setting an internal `_encrypted` flag from its own
+   local rather than trusting anything in the decoded/caller-supplied array (a plain array
+   claiming `_encrypted => true` must not be able to impersonate a real seal). Then runs
+   `Engine::enforce_seal_policy()` on the resulting `Config`: outside production, a non-default
+   unsealed config still applies and gets a one-time admin notice; in production, it's
+   discarded down to just the `type`/`text_domain`/`permalink` identity keys (a pirate gains
+   nothing from those, but dropping them can fail a legitimate customer closed) and logged via
+   `error_log()` instead of a customer-visible notice — sealing is mandatory before shipping,
+   not optional obfuscation. Bootstrap-level notices (the tamper-check one, plus the frozen
+   facade's own registration-failure notices in `gumpress.php`) identify the module by its
+   plugin/theme name — via `Module::label()`, a static header read that works from a bare file
+   path before any `Module` exists — falling back to the raw product_id only when the header
+   can't be read.
 2. `Config` — all defaults live here once (`DEFAULTS` const), including the sealed-config
    codec (AES-256-CBC + HMAC-SHA256, prefix `gp1`). `white_label` is one of those defaults
    (`false`) but is only ever a pre-activation hint — see `Module::is_white_label()`, which

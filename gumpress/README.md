@@ -33,6 +33,7 @@ set `type` explicitly only if you have an unusual layout.
 | `payment_grace` | `7` | Days a subscription stays valid after a failed payment. |
 | `max_uses` | `1` | Seat limit. **Read this before changing it** — see [Seat limiting](#seat-limiting). |
 | `max_uses_policy` | `'block'` | `'block'` invalidates the license when over the limit; `'warn'` only shows a notice. |
+| `skip_local_seats` | `true` | Don't count a verification from a local/dev/staging site (see [Seat limiting](#seat-limiting)) as a seat activation. The license itself is still verified normally either way — this only affects seat accounting. Set `false` to have staging installs consume a seat like any other site. |
 | `license_check_url` | Gumroad's API | Point this at your own proxy to add server-side seat enforcement, custom entitlements, etc. |
 | `proxy_fallback` | `false` | If your custom `license_check_url` is unreachable, fall back to Gumroad directly. Off by default because a proxy is usually doing enforcement Gumroad-direct can't. |
 | `offline_grace` | `14` | Days a previously-valid license stays valid while the license server is unreachable. |
@@ -150,10 +151,13 @@ token (which a distributed plugin can't hold). Two things make a non-zero
 default survivable rather than a support-ticket generator:
 
 - GumPress avoids re-incrementing for the same (license key, site) pair, and
-  never increments outside of what looks like a production environment
+  (while `skip_local_seats` stays at its default `true`) never increments
+  outside of what looks like a production environment
   (`wp_get_environment_type()`, `.local`/`.test` hosts, `dev./staging./stage.`
-  subdomains, RFC1918 addresses, WP-CLI) — see [Server-controlled
-  overrides](#server-controlled-overrides) for the mechanics.
+  subdomains, RFC1918 addresses, WP-CLI). Set `skip_local_seats` to `false`
+  if you'd rather staging installs consume a seat like any other site — see
+  [Server-controlled overrides](#server-controlled-overrides) for the
+  mechanics.
 - A proxy reporting its own seat model (`gumpress.seats`, below) takes over
   entirely and the local `max_uses` check never runs.
 
@@ -205,9 +209,9 @@ carries no `gumpress.seats` block — see
 server tracks seats, report them there instead of pushing a cap here.
 
 Only a fixed whitelist of keys can ever be pushed this way: `max_uses`,
-`max_uses_policy`, `payment_grace`, `offline_grace`, `offline_policy`,
-`disallow_test_keys`, `update_check_url` (only when it shares a registrable
-domain with your compiled-in `license_check_url`), `hide_owner_email`,
+`max_uses_policy`, `skip_local_seats`, `payment_grace`, `offline_grace`,
+`offline_policy`, `disallow_test_keys`, `update_check_url` (only when it
+shares a registrable domain with your compiled-in `license_check_url`), `hide_owner_email`,
 `hide_custom_fields`, `suppress_notices`, `suppress_key_notice`,
 `plugins_page_link`, `hide_menu_page`, `license_page_title`,
 `license_page_menu`. Every value is type-checked and range-clamped before

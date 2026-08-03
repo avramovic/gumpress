@@ -107,7 +107,10 @@ the whole class structure:
    (`due()`/`ensure_scheduled()`). Caches both success *and* failure responses (a 1.x bug
    cached only HTTP 200, making an invalid key trigger a blocking HTTP request on every admin
    page load). `should_increment()` decides whether a verify call counts as a real seat
-   activation, using `Env` to avoid burning a seat on local/staging/WP-CLI environments.
+   activation, using `Env` to avoid burning a seat on local/staging/WP-CLI environments —
+   gated by `skip_local_seats` (default `true`), a normal `Overrides::OVERRIDABLE` key, unlike
+   `white_label` below. Only affects seat accounting; the license is still verified and run
+   through `Validator::evaluate()` identically regardless.
    Also stores a sticky `white_label` flag alongside the cached payload — written only when
    a response actually addresses it, so it survives a denial, a 4xx, or the customer
    clearing their license key (all of which null/replace `payload`, but must not silently

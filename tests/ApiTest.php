@@ -28,13 +28,18 @@ final class ApiTest extends TestCase
     protected function setUp(): void
     {
         gumpress_test_reset_store();
+        // Every other test in this file assumes should_increment()'s
+        // Env::is_non_production() branch is false — pin it explicitly
+        // rather than relying on stubs.php's initial value surviving
+        // whatever the last-run test file (e.g. EnvTest) left it as.
+        $GLOBALS['__gumpress_test_env_type'] = 'production';
     }
 
-    private function module(): Module
+    private function module(array $options = []): Module
     {
-        return Module::create('/tmp/fake-plugin/fake-plugin.php', self::PRODUCT, new Config([
+        return Module::create('/tmp/fake-plugin/fake-plugin.php', self::PRODUCT, new Config(array_merge([
             'type' => 'plugin',
-        ]));
+        ], $options)));
     }
 
     private function optionName(string $suffix): string
@@ -185,6 +190,44 @@ final class ApiTest extends TestCase
             $GLOBALS['__gumpress_test_options'][$this->optionName('seat')]['key_hash']
         );
         $this->assertTrue($this->shouldIncrement($api));
+    }
+
+    /**
+     * The bare default — no config option set at all — must behave exactly
+     * like the old, unconditional Env::is_non_production() check: a
+     * non-production site never increments.
+     */
+    public function test_should_increment_is_false_on_a_non_production_site_by_default(): void
+    {
+        $module = $this->module();
+        $module->set_license_key(self::KEY);
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        $this->assertFalse($this->shouldIncrement($module->api()));
+    }
+
+    /**
+     * skip_local_seats: false is the whole point of this option — a
+     * developer who wants staging installs to consume a seat like any
+     * other site. Config, not base_config, so this proves the flag is
+     * read from Overrides-aware effective config, not just compiled in.
+     */
+    public function test_should_increment_is_true_on_a_non_production_site_when_skip_local_seats_is_disabled(): void
+    {
+        $module = $this->module(['skip_local_seats' => false]);
+        $module->set_license_key(self::KEY);
+        $GLOBALS['__gumpress_test_env_type'] = 'staging';
+
+        $this->assertTrue($this->shouldIncrement($module->api()));
+    }
+
+    /** skip_local_seats only matters off of a non-production site; production is unaffected either way. */
+    public function test_should_increment_is_true_on_a_production_site_regardless_of_skip_local_seats(): void
+    {
+        $module = $this->module(['skip_local_seats' => false]);
+        $module->set_license_key(self::KEY);
+
+        $this->assertTrue($this->shouldIncrement($module->api()));
     }
 
     public function test_migrate_runs_once(): void

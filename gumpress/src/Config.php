@@ -42,6 +42,14 @@ final class Config
                          // seats) and never decrementing. Set to 0 to disable seat limiting.
         'max_uses_policy' => 'block', // 'block' (invalidate) | 'warn' (show a notice).
 
+        // Whether a verification from a local/dev/staging site
+        // (Env::is_non_production()) is exempt from counting as a seat
+        // activation — see Api::should_increment(). Only ever affects seat
+        // ACCOUNTING: the license itself is still verified and run through
+        // Validator::evaluate() identically in every environment. Set false
+        // to have staging installs consume a seat like any other site.
+        'skip_local_seats' => true,
+
         // Network / caching / offline behaviour
         'license_check_url' => self::DEFAULT_LICENSE_URL,
         'proxy_fallback' => false, // fall back to Gumroad direct if a custom proxy is unreachable.

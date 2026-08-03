@@ -27,6 +27,24 @@ final class OverridesTest extends TestCase
         $this->assertSame('block', $effective->get('max_uses_policy'));
     }
 
+    public function test_skip_local_seats_is_whitelisted_and_applied(): void
+    {
+        $base = new Config(['skip_local_seats' => true]);
+
+        $effective = Overrides::apply($base, ['skip_local_seats' => false]);
+
+        $this->assertFalse($effective->get('skip_local_seats'));
+    }
+
+    public function test_skip_local_seats_rejects_a_non_bool_and_keeps_the_base_value(): void
+    {
+        $base = new Config(['skip_local_seats' => true]);
+
+        $effective = Overrides::apply($base, ['skip_local_seats' => 'not-a-bool']);
+
+        $this->assertTrue($effective->get('skip_local_seats'));
+    }
+
     public function test_never_overridable_keys_are_ignored(): void
     {
         $base = new Config(['license_check_url' => 'https://mine.example/verify', 'permalink' => 'my-real-permalink']);

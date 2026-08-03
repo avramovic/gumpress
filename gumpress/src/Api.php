@@ -368,9 +368,27 @@ final class Api
         return (int) $capped + random_int(0, 300);
     }
 
+    /**
+     * Called twice per verify — once from post() to build the
+     * increment_uses_count body flag, once from interpret() to decide
+     * whether to persist the local seat marker via record_activation() —
+     * so it must stay side-effect-free and return the same answer both
+     * times for a given call.
+     *
+     * Reads config() (effective, server-override-aware), not
+     * base_config(): skip_local_seats is a normal Overrides::OVERRIDABLE
+     * key, unlike license_check_url/proxy_fallback which deliberately
+     * never are (see Overrides.php's class docblock). This does mean the
+     * very first verify a site ever makes can't have a pushed override
+     * applied yet (config() only has the compiled-in default until a
+     * response arrives), so a developer relying on a server-pushed
+     * `skip_local_seats: false` sees it take effect from the SECOND verify
+     * onward. Self-correcting either way — the seat marker is never
+     * written on that first call, so the next verify still increments.
+     */
     private function should_increment(string $key): bool
     {
-        if (Env::is_non_production()) {
+        if ($this->module->config()->get('skip_local_seats', true) && Env::is_non_production()) {
             return false;
         }
 

@@ -19,6 +19,7 @@ final class ConfigTest extends TestCase
         $this->assertSame(14, $config->get('offline_grace'));
         $this->assertSame(Config::DEFAULT_LICENSE_URL, $config->get('license_check_url'));
         $this->assertFalse($config->get('disallow_test_keys'));
+        $this->assertTrue($config->get('skip_local_seats'));
         $this->assertFalse($config->get('white_label'));
     }
 

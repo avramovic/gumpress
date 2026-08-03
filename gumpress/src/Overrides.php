@@ -30,6 +30,7 @@ final class Overrides
     private const OVERRIDABLE = [
         'max_uses',
         'max_uses_policy',
+        'skip_local_seats',
         'payment_grace',
         'offline_grace',
         'offline_policy',
@@ -106,6 +107,7 @@ final class Overrides
                 return in_array($value, ['grace', 'closed', 'open'], true) ? $value : null;
 
             case 'disallow_test_keys':
+            case 'skip_local_seats':
             case 'hide_owner_email':
             case 'hide_custom_fields':
             case 'suppress_notices':

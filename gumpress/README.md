@@ -48,6 +48,7 @@ set `type` explicitly only if you have an unusual layout.
 | `suppress_key_notice` | `false` | Disable only the "no key entered yet" notice. |
 | `hide_owner_email` | `false` | Don't show the purchaser's email on the license page. |
 | `hide_custom_fields` | `false` | Don't show Gumroad checkout custom fields on the license page. |
+| `white_label` | `false` | Hide the "Protected with ♥ by GumPress" credit in the wp-admin footer. A **pre-activation hint only**: the first explicit answer from your `license_check_url` server — `true` or `false` — overrides it permanently, so setting it here can't grant you white label against a server that says otherwise. See [Your server waiving the admin footer credit](#your-server-waiving-the-admin-footer-credit). |
 | `license_page_title` | module name + "License" | License settings page `<title>`. |
 | `license_page_menu` | module name + "License" | License settings page menu label. |
 
@@ -302,12 +303,19 @@ response:
 }
 ```
 
-There is deliberately **no local option to turn this off** — it isn't a
-config key, it can't be pushed through `gumpress.config`, and it isn't
-subject to `lock_config`. That's on purpose: it's your licensing server's
-call, not something a config array (yours or a compromised override) should
-be able to grant itself. `GumPress::is_white_label()` reports the current
-answer.
+`white_label` is a normal config option (default `false`, see
+[Options](#options)), but the value you compile in is a **pre-activation
+hint only** — it covers the window before this site's first ever verify,
+since no request is made until a license key is entered. The first explicit
+answer from your server, `true` or `false`, overrides it permanently.
+`GumPress::is_white_label()` reports the current answer.
+
+Unlike the keys in [Server-controlled overrides](#server-controlled-overrides),
+it deliberately can't be pushed through `gumpress.config` and isn't subject to
+`lock_config` — your server sends it as a sibling of `gumpress.seats` instead.
+That's on purpose: it's your licensing server's call, and a config array (yours
+or a compromised override channel) shouldn't be able to grant itself the waiver
+or pin one against your server's correction.
 
 The flag is sticky, not read fresh off the latest payload — once your server
 has sent an explicit `true` or `false`, that answer survives an unreachable

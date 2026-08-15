@@ -36,6 +36,10 @@ $GLOBALS['__gumpress_test_salt'] = 'unit-test-salt';
 // against. $tag => $priority => list of ['cb' => callable, 'args' => int].
 $GLOBALS['__gumpress_test_hooks'] = [];
 
+// Queued wp_remote_post()/wp_remote_get() responses + a record of every
+// request made — see gumpress_test_dispatch_http() below.
+$GLOBALS['__gumpress_test_http'] = ['queue' => [], 'requests' => []];
+
 function gumpress_test_reset_store(): void
 {
     $GLOBALS['__gumpress_test_options'] = [];
@@ -43,6 +47,7 @@ function gumpress_test_reset_store(): void
     $GLOBALS['__gumpress_test_cron'] = [];
     $GLOBALS['__gumpress_test_salt'] = 'unit-test-salt';
     $GLOBALS['__gumpress_test_hooks'] = [];
+    $GLOBALS['__gumpress_test_http'] = ['queue' => [], 'requests' => []];
 }
 
 if (!function_exists('wp_salt')) {
@@ -322,5 +327,95 @@ if (!function_exists('wp_unschedule_event')) {
         unset($GLOBALS['__gumpress_test_cron'][$hook]);
 
         return true;
+    }
+}
+
+/**
+ * Minimal HTTP layer stand-in for Api::verify_now()'s network path
+ * (wp_remote_post/wp_remote_get + the is_wp_error/response-code/body
+ * readers). $GLOBALS['__gumpress_test_http']['queue'] holds responses to
+ * hand out in order — either a WP_Error or a ['response' => ['code' =>
+ * int], 'body' => string] array, mirroring wp_remote_post()'s real return
+ * shape. Each call also records itself in ['requests'], so a test can
+ * assert exactly how many requests fired and what body each one carried
+ * (e.g. increment_uses_count) — the whole point of testing probe-then-claim.
+ * An empty queue means "unexpected extra request": it fails loudly with a
+ * WP_Error rather than silently returning something request-shaped, so a
+ * test that under-queues responses gets a clear failure instead of a
+ * misleadingly "successful" transport_error interpretation.
+ */
+if (!class_exists('WP_Error')) {
+    class WP_Error
+    {
+        public $errors = [];
+
+        public function __construct($code = '', $message = '', $data = null)
+        {
+            if ($code !== '') {
+                $this->errors[$code][] = $message;
+            }
+        }
+
+        public function get_error_message()
+        {
+            $first = reset($this->errors);
+
+            return $first ? reset($first) : '';
+        }
+    }
+}
+
+if (!function_exists('is_wp_error')) {
+    function is_wp_error($thing)
+    {
+        return $thing instanceof WP_Error;
+    }
+}
+
+if (!function_exists('wp_remote_retrieve_response_code')) {
+    function wp_remote_retrieve_response_code($response)
+    {
+        if (is_wp_error($response)) {
+            return 0;
+        }
+
+        return (int) ($response['response']['code'] ?? 0);
+    }
+}
+
+if (!function_exists('wp_remote_retrieve_body')) {
+    function wp_remote_retrieve_body($response)
+    {
+        if (is_wp_error($response)) {
+            return '';
+        }
+
+        return (string) ($response['body'] ?? '');
+    }
+}
+
+function gumpress_test_dispatch_http($method, $url, $args)
+{
+    $GLOBALS['__gumpress_test_http']['requests'][] = ['method' => $method, 'url' => $url, 'args' => $args];
+
+    $queue = &$GLOBALS['__gumpress_test_http']['queue'];
+    if (empty($queue)) {
+        return new WP_Error('http_request_failed', 'gumpress_test_dispatch_http: no response queued');
+    }
+
+    return array_shift($queue);
+}
+
+if (!function_exists('wp_remote_post')) {
+    function wp_remote_post($url, $args = [])
+    {
+        return gumpress_test_dispatch_http('post', $url, $args);
+    }
+}
+
+if (!function_exists('wp_remote_get')) {
+    function wp_remote_get($url, $args = [])
+    {
+        return gumpress_test_dispatch_http('get', $url, $args);
     }
 }

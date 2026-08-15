@@ -352,7 +352,14 @@ final class Module
         $license = $this->api->license();
         $reachable = $this->api->last_reachable();
 
-        return $this->status_cache = Validator::evaluate($license, $reachable, $this->api->valid_at(), $this->config());
+        return $this->status_cache = Validator::evaluate(
+            $license,
+            $reachable,
+            $this->api->valid_at(),
+            $this->config(),
+            null,
+            $this->api->seat_ordinal()
+        );
     }
 
     public function valid(): bool

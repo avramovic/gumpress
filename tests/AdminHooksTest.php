@@ -69,6 +69,19 @@ final class AdminHooksTest extends TestCase
             ],
         ]);
 
+        // A real claim always also records a seat marker (Api::record_activation())
+        // — seed one here too, or this site (no marker, uses === max_uses === 1)
+        // would look identical to an unrelated site that was just refused a
+        // seat at the exact same cap, and get blocked by the same check.
+        $hashKey = new ReflectionMethod(\GumPress\V2\Api::class, 'hash_key');
+        $hashKey->setAccessible(true);
+        $GLOBALS['__gumpress_test_options'][$module->option_name('seat')] = [
+            'key_hash' => $hashKey->invoke($module->api(), self::KEY),
+            'host' => \GumPress\V2\Env::site_identity(),
+            'activated_at' => time(),
+            'ordinal' => 1,
+        ];
+
         return $module;
     }
 

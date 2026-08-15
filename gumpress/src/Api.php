@@ -163,8 +163,7 @@ final class Api
                 $fresh['white_label'] = $whiteLabel;
             }
 
-            $this->option_set($this->state_key(), Vault::seal($fresh));
-            $this->module->forget_effective_config();
+            $this->save_state($fresh);
 
             return;
         }
@@ -178,7 +177,42 @@ final class Api
         $config = $this->module->base_config();
         $url = (string) $config->get('license_check_url', Config::DEFAULT_LICENSE_URL);
 
-        $response = $this->post($url, $key);
+        $claim = $this->should_increment($key);
+
+        // Claiming a seat and denying it are two different questions: the
+        // wire flag below only says "count this call" — Gumroad applies it
+        // and increments `uses` before this code ever sees whether the site
+        // was actually over the local max_uses cap. A rejected site would
+        // otherwise still consume the seat it was just refused, poisoning
+        // the count for every genuinely-activated site on the next re-check
+        // (see the "seat claiming" section of README.md's Seat limiting).
+        // So when the local cap can bite, probe first with
+        // increment_uses_count=false, decide locally whether there's room,
+        // and only then send the real, incrementing call. A custom
+        // license_check_url is exempt: it enforces its own seat model (see
+        // License::has_server_seats()) and a probe would only double its
+        // traffic for no benefit.
+        $probe = $claim && $url === Config::DEFAULT_LICENSE_URL && $this->local_cap_applies();
+
+        if ($probe) {
+            $response = $this->post($url, $key, false);
+            $state = $this->interpret($response, $state, $key, false);
+            $this->save_state($state);
+
+            if (!$this->seat_available()) {
+                // Known gap: if $url were a custom proxy that then fell back
+                // to Gumroad direct, that fallback call still can't be
+                // probed — the probe decision has to be made before the
+                // first request goes out, or the proxy's own accounting
+                // would lose its increment. Doesn't apply here: $probe is
+                // only true when $url is already Gumroad direct.
+                return;
+            }
+
+            $state = $this->state();
+        }
+
+        $response = $this->post($url, $key, $claim);
 
         if (
             $this->is_transport_failure($response)
@@ -189,15 +223,71 @@ final class Api
             // back to Gumroad direct. v1 did this unconditionally, which silently
             // defeats any server-side seat enforcement the proxy was doing — so
             // here it's opt-in and limited to one retry.
-            $response = $this->post(Config::DEFAULT_LICENSE_URL, $key);
+            $response = $this->post(Config::DEFAULT_LICENSE_URL, $key, $claim);
         }
 
-        $state = $this->interpret($response, $state, $key);
+        $state = $this->interpret($response, $state, $key, $claim);
+        $this->save_state($state);
+    }
+
+    private function save_state(array $state): void
+    {
         $this->option_set($this->state_key(), Vault::seal($state));
         $this->module->forget_effective_config();
     }
 
-    private function post(string $url, string $key)
+    /**
+     * Whether the shim's own max_uses cap is even in a position to reject
+     * this verify — i.e. whether probing before claiming is worth the extra
+     * request. Deliberately silent on has_server_seats(): that can only be
+     * known from a response, which is exactly what the probe is for.
+     */
+    private function local_cap_applies(): bool
+    {
+        $config = $this->module->config();
+
+        if ($config->get('max_uses_policy', 'block') !== 'block') {
+            return false; // 'warn' never blocks, so it always needs the real seat.
+        }
+
+        return ((int) $config->get('max_uses')) > 0;
+    }
+
+    /**
+     * Reads the probe response just cached by verify_now() and decides
+     * whether this site should go on to claim a seat. Mirrors, but does not
+     * reuse, Validator's own seat-limit guard: that one blocks strictly
+     * *over* max_uses (uses() > max) because it's judging a license that
+     * already includes this site's own claim; here uses() is the count
+     * *before* this site's activation, so room exists at uses() < max, not
+     * uses() <= max.
+     */
+    private function seat_available(): bool
+    {
+        $license = $this->license();
+        if ($license === null) {
+            return false; // transport failure / unparsable probe response.
+        }
+
+        $config = $this->module->config();
+        $status = Validator::evaluate($license, $this->last_reachable(), $this->valid_at(), $config, null, null);
+        if (!$status->is_valid()) {
+            // Refunded, disputed, chargebacked, or an ended subscription
+            // doesn't get a seat either — no point claiming one for a site
+            // that's about to be denied for an unrelated reason.
+            return false;
+        }
+
+        if ($license->has_server_seats()) {
+            return true; // the server's own seat model is authoritative.
+        }
+
+        $max = (int) $config->get('max_uses');
+
+        return $max <= 0 || $license->uses() < $max;
+    }
+
+    private function post(string $url, string $key, bool $increment)
     {
         return wp_remote_post($url, [
             'timeout' => 10,
@@ -215,7 +305,7 @@ final class Api
                 // resolves by URL (endpoint_token) and real Gumroad only
                 // needs product_id.
                 'product_id' => $this->module->product_id(),
-                'increment_uses_count' => $this->should_increment($key) ? 'true' : 'false',
+                'increment_uses_count' => $increment ? 'true' : 'false',
                 // Per-domain enforcement (seat limits, domain locks) is impossible
                 // without the domain — without this, a licensing server's only
                 // signal is the WP User-Agent.
@@ -232,7 +322,7 @@ final class Api
             || empty(wp_remote_retrieve_body($response));
     }
 
-    private function interpret($response, array $state, string $key): array
+    private function interpret($response, array $state, string $key, bool $claimed): array
     {
         $now = time();
         $state['checked_at'] = $now;
@@ -305,8 +395,17 @@ final class Api
         }
 
         $state['valid_at'] = $now;
-        if ($this->should_increment($key)) {
-            $this->record_activation($key);
+        if ($claimed) {
+            $this->record_activation($key, $license->uses());
+        } else {
+            // Not claiming a new seat this call — but a site that already
+            // holds one from before 2.0.1 (marker present, no ordinal yet)
+            // gets one filled in now, provided it's still within the cap.
+            // Nothing is backfilled once a site is already over the limit:
+            // there is no way to tell a genuinely-poisoned counter apart
+            // from an actual over-limit activation, so a stale marker stays
+            // exactly as blocked as it is today rather than being amnestied.
+            $this->backfill_ordinal($key, $license);
         }
 
         // Gumroad nulls subscription_failed_at on a successful retry, so shorten
@@ -369,11 +468,10 @@ final class Api
     }
 
     /**
-     * Called twice per verify — once from post() to build the
-     * increment_uses_count body flag, once from interpret() to decide
-     * whether to persist the local seat marker via record_activation() —
-     * so it must stay side-effect-free and return the same answer both
-     * times for a given call.
+     * Called once per verify, in verify_now(), to decide the
+     * increment_uses_count value threaded through post()/interpret() for
+     * that call (and, when the local cap can bite, to decide whether a
+     * probe runs first — see local_cap_applies()/seat_available()).
      *
      * Reads config() (effective, server-override-aware), not
      * base_config(): skip_local_seats is a normal Overrides::OVERRIDABLE
@@ -402,13 +500,110 @@ final class Api
         return true;
     }
 
-    private function record_activation(string $key): void
+    /**
+     * This site's 1-based position among the license's activations, as of
+     * the call that claimed its seat; a value guaranteed > max_uses when
+     * this site is confirmed to hold no seat and the cap is confirmed full;
+     * or null when nothing about this site's own position is known (see
+     * below). Validator::evaluate() compares this against max_uses instead
+     * of the license's current (global, ever-growing) `uses` count, so a
+     * seat this site legitimately claimed can never be taken away by uses
+     * growing later — a third site's rejected attempt, a clone, a restored
+     * backup, or another site still running an older GumPress that claims
+     * without probing.
+     *
+     * 0 is a sentinel meaning "holds a place, never block on it" — the same
+     * skip_local_seats + non-production condition that keeps should_increment()
+     * from ever claiming a seat for this site in the first place.
+     *
+     * null is the pre-2.0.1 default (a seat marker with no ordinal, or no
+     * marker at all): Validator falls back to comparing `uses()` to max_uses
+     * directly. That fallback assumes `uses()` already counts this site's
+     * own claim, which was always true before probing existed (every verify
+     * claimed before validating) — so it stays correct for a legacy marker.
+     * It is NOT assumed for a site that holds no marker at all: such a site
+     * was never counted in `uses()`, so seeing `uses() === max_uses` there
+     * means the cap is exactly full, not that this site fits within it —
+     * the branch below turns that into an explicit over-max value so
+     * Validator blocks it instead of reading "not yet over" as "fine".
+     */
+    public function seat_ordinal(): ?int
+    {
+        if ($this->module->config()->get('skip_local_seats', true) && Env::is_non_production()) {
+            return 0;
+        }
+
+        $seat = $this->option_get($this->seat_key(), []);
+        $host = Env::site_identity();
+        $key = $this->module->license_key();
+
+        if ($key !== null && ($seat['key_hash'] ?? null) === $this->hash_key($key) && ($seat['host'] ?? null) === $host) {
+            return isset($seat['ordinal']) ? (int) $seat['ordinal'] : null;
+        }
+
+        // No marker at all: this site has never claimed a seat. If the most
+        // recently cached response already shows the cap reached (or
+        // exceeded) without this site's own claim counted in it, there is
+        // definitely no room for it either.
+        $license = $this->license();
+        if ($license === null || $license->has_server_seats()) {
+            return null;
+        }
+
+        $config = $this->module->config();
+        if ($config->get('max_uses_policy', 'block') !== 'block') {
+            return null;
+        }
+
+        $max = (int) $config->get('max_uses');
+
+        return ($max > 0 && $license->uses() >= $max) ? ($max + 1) : null;
+    }
+
+    private function record_activation(string $key, int $ordinal): void
     {
         $this->option_set($this->seat_key(), [
             'key_hash' => $this->hash_key($key),
             'host' => Env::site_identity(),
             'activated_at' => time(),
+            'ordinal' => $ordinal,
         ]);
+    }
+
+    /**
+     * A site that already holds a seat marker from before 2.0.1 (no
+     * ordinal recorded) gets one filled in the first time a non-claiming
+     * verify sees it's still within the cap — protecting it from now on
+     * without needing a fresh activation. Deliberately narrow: nothing is
+     * backfilled once uses() is already past max, since a poisoned counter
+     * and a real over-limit activation are indistinguishable from here, and
+     * granting the benefit of the doubt would silently amnesty every
+     * already-blocked site on the next re-check.
+     */
+    private function backfill_ordinal(string $key, License $license): void
+    {
+        if ($license->has_server_seats()) {
+            return;
+        }
+
+        $max = (int) $this->module->config()->get('max_uses');
+        if ($max <= 0 || $license->uses() > $max) {
+            return;
+        }
+
+        $seat = $this->option_get($this->seat_key(), []);
+        $host = Env::site_identity();
+
+        if (($seat['key_hash'] ?? null) !== $this->hash_key($key) || ($seat['host'] ?? null) !== $host) {
+            return; // no marker for this site to backfill.
+        }
+
+        if (array_key_exists('ordinal', $seat)) {
+            return; // already has one (including the non-production sentinel).
+        }
+
+        $seat['ordinal'] = $license->uses();
+        $this->option_set($this->seat_key(), $seat);
     }
 
     public function license(): ?License

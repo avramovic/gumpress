@@ -313,4 +313,59 @@ final class ValidatorTest extends TestCase
 
         $this->assertSame(Status::SEAT_LIMIT, $status->code());
     }
+
+    /**
+     * A seat this site already claimed within the cap survives the global
+     * `uses` counter growing past max_uses afterwards — the whole point of
+     * threading seat_ordinal through, see Api::seat_ordinal().
+     */
+    public function test_seat_ordinal_within_cap_survives_uses_growing_past_max(): void
+    {
+        $license = self::load('valid-subscription'); // uses: 3
+        $config = new Config(['max_uses' => 2, 'max_uses_policy' => 'block']);
+
+        $status = Validator::evaluate($license, true, null, $config, null, 2);
+
+        $this->assertSame(Status::VALID, $status->code());
+    }
+
+    public function test_seat_ordinal_past_cap_is_blocked(): void
+    {
+        $license = self::load('valid-subscription'); // uses: 3
+        $config = new Config(['max_uses' => 2, 'max_uses_policy' => 'block']);
+
+        $status = Validator::evaluate($license, true, null, $config, null, 3);
+
+        $this->assertSame(Status::SEAT_LIMIT, $status->code());
+    }
+
+    public function test_null_seat_ordinal_falls_back_to_the_legacy_uses_check(): void
+    {
+        $license = self::load('valid-subscription'); // uses: 3
+        $config = new Config(['max_uses' => 2, 'max_uses_policy' => 'block']);
+
+        $status = Validator::evaluate($license, true, null, $config, null, null);
+
+        $this->assertSame(Status::SEAT_LIMIT, $status->code());
+    }
+
+    public function test_seat_ordinal_sentinel_zero_never_blocks(): void
+    {
+        $license = self::load('valid-subscription'); // uses: 3
+        $config = new Config(['max_uses' => 2, 'max_uses_policy' => 'block']);
+
+        $status = Validator::evaluate($license, true, null, $config, null, 0);
+
+        $this->assertSame(Status::VALID, $status->code());
+    }
+
+    public function test_seat_ordinal_is_ignored_when_the_server_reports_its_own_seats(): void
+    {
+        $license = self::load('valid-with-server-seats'); // uses: 3, gumpress.seats.limit: 5
+        $config = new Config(['max_uses' => 1, 'max_uses_policy' => 'block']);
+
+        $status = Validator::evaluate($license, true, null, $config, null, 99);
+
+        $this->assertSame(Status::VALID, $status->code());
+    }
 }

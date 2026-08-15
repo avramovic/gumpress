@@ -35,7 +35,7 @@ defined('ABSPATH') || die;
 require_once __DIR__ . '/src/load.php';
 
 $GLOBALS['gumpress']['sources'][wp_normalize_path(__DIR__)] = [
-    'version' => '2.0.0',
+    'version' => '2.0.1',
     'create' => [\GumPress\V2\Engine::class, 'create'],
 ];
 

@@ -29,13 +29,21 @@ final class Validator
      *                                an authoritative answer from the server.
      * @param int|null $valid_at     Unix timestamp of the last confirmed-valid
      *                                check, or null if never confirmed.
+     * @param int|null $seat_ordinal This site's 1-based position among the
+     *                                license's activations at the time it
+     *                                claimed its seat (Api::seat_ordinal()),
+     *                                0 meaning "never claims, never block",
+     *                                or null if this site never claimed one
+     *                                (including: claimed before this field
+     *                                existed and not yet backfilled).
      */
     public static function evaluate(
         ?License $license,
         bool $reachable,
         ?int $valid_at,
         Config $config,
-        ?int $now = null
+        ?int $now = null,
+        ?int $seat_ordinal = null
     ): Status {
         $now = $now ?? time();
 
@@ -78,8 +86,34 @@ final class Validator
         // own cap must stand down rather than second-guess it.
         if (!$license->has_server_seats()) {
             $max = (int) $config->get('max_uses');
-            if ($max > 0 && $license->uses() > $max && $config->get('max_uses_policy', 'block') === 'block') {
-                return new Status(Status::SEAT_LIMIT, ['uses' => $license->uses(), 'max' => $max]);
+            if ($max > 0 && $config->get('max_uses_policy', 'block') === 'block') {
+                // Gumroad's `uses` is a single global counter with no site
+                // identity, and it never decrements — a third site's
+                // rejected attempt, a clone, a restored backup, or a site
+                // still on an older GumPress that claims without probing
+                // can all push it past max after this site already claimed
+                // its seat fairly. Once claimed within the cap, a seat is
+                // never taken back solely because the counter grew later.
+                //
+                // $seat_ordinal !== null means this site's own eligibility
+                // is already known (its claimed position, or an explicit
+                // "confirmed no room" sentinel from Api::seat_ordinal()) and
+                // is judged on its own, not on the live `uses` count — a
+                // site that never claimed is not itself represented in
+                // `uses`, so comparing `uses` to `max` for it would read
+                // "exactly full" as "room for one more" and never actually
+                // block anyone. Only when nothing is known about this site's
+                // own position (null — the pre-2.0.1 default, where a claim
+                // always happened before this check ever ran, so `uses`
+                // already includes it) does the plain `uses() > max` compare
+                // apply, exactly as it always has.
+                $blocked = $seat_ordinal !== null
+                    ? $seat_ordinal > $max
+                    : $license->uses() > $max;
+
+                if ($blocked) {
+                    return new Status(Status::SEAT_LIMIT, ['uses' => $license->uses(), 'max' => $max]);
+                }
             }
         }
 

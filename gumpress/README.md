@@ -148,8 +148,8 @@ above are what actually decides access.
 license key activates one site. This is enforced against Gumroad's `uses`
 field, which counts **verification calls**, not active installs: it never
 decrements, and there's no way to release a seat without a seller access
-token (which a distributed plugin can't hold). Two things make a non-zero
-default survivable rather than a support-ticket generator:
+token (which a distributed plugin can't hold). Several things make a
+non-zero default survivable rather than a support-ticket generator:
 
 - GumPress avoids re-incrementing for the same (license key, site) pair, and
   (while `skip_local_seats` stays at its default `true`) never increments
@@ -161,17 +161,57 @@ default survivable rather than a support-ticket generator:
   mechanics.
 - A proxy reporting its own seat model (`gumpress.seats`, below) takes over
   entirely and the local `max_uses` check never runs.
+- **Claiming a seat is probed before it's taken.** Against Gumroad direct,
+  when `max_uses` could actually reject the call, GumPress first sends a
+  non-incrementing check (`increment_uses_count=false`) and only follows up
+  with the real, incrementing call if there's room. A site that gets
+  rejected therefore never bumps `uses` on its way out — before 2.0.1, a
+  rejected activation attempt still counted, silently pushing every
+  genuinely-activated site over the limit on its next re-check.
+- **A seat once claimed within the cap is never taken back later.** Each
+  site remembers its own position among the license's activations at the
+  moment it claimed a seat (`ordinal` in the site's local seat record) and
+  is judged against that, not against `uses` as it stands *now*. `uses` is
+  global and only ever grows — a rejected third site, a clone, a restored
+  backup, or another site still running pre-2.0.1 GumPress (which claims
+  without probing) can all push it past `max_uses` afterwards, and none of
+  that revokes a seat this site fairly holds.
 
-But none of that survives a fresh database: cloning production to staging,
-restoring a backup, or a `search-replace` on the domain can all look like a
-"new site" to Gumroad and push `uses` past `1`. If that's a real risk for
-your customers, set `'max_uses' => 0` to disable the check outright, or
-`'max_uses_policy' => 'warn'` to show a notice instead of invalidating the
-license. For real seat enforcement across sites, do it in a self-hosted
-`license_check_url` proxy that holds your Gumroad seller token and tracks
-seats server-side — `max_uses` against Gumroad directly is advisory only.
-`uses` on the response then means *your* proxy's active-seat count, not
-Gumroad's verification counter.
+None of that helps a license that's *already* over its limit before
+upgrading to 2.0.1 — sites activated under an older release have no recorded
+position to fall back on, and are (deliberately) not granted one
+retroactively once they're already over cap; see
+[Recovering an already-over-limit license](#recovering-an-already-over-limit-license).
+Cloning production to staging, restoring a backup, or a `search-replace` on
+the domain can also still look like a "new site" to Gumroad and push `uses`
+up — the site making that clone/restore call is the one that gets rejected
+(and never counted for it), but it doesn't undo activations already spent by
+earlier clones. If that's a real risk for your customers, set
+`'max_uses' => 0` to disable the check outright, or `'max_uses_policy' =>
+'warn'` to show a notice instead of invalidating the license. For real seat
+enforcement across sites, do it in a self-hosted `license_check_url` proxy
+that holds your Gumroad seller token and tracks seats server-side —
+`max_uses` against Gumroad directly is advisory only. `uses` on the response
+then means *your* proxy's active-seat count, not Gumroad's verification
+counter, and the probing above only ever applies to Gumroad direct: a proxy
+already enforces its own seats, so probing it first would just double its
+traffic for no benefit.
+
+### Recovering an already-over-limit license
+
+Since there's no way to tell a poisoned counter apart from a real
+over-limit activation, GumPress does not grant retroactive amnesty to a
+license that was already past `max_uses` before upgrading to 2.0.1. Options,
+from least to most disruptive:
+
+- Temporarily raise `max_uses` (or push it via [Server-controlled
+  overrides](#server-controlled-overrides)) to clear the immediate block,
+  then lower it again — every site still holding a legitimate seat keeps it
+  once it re-verifies under the higher cap and records its own position.
+- Set `max_uses_policy` to `'warn'` instead of `'block'` while you sort out
+  which sites are real.
+- If you hold a Gumroad seller access token, Gumroad's API can reset a
+  license's `uses` count from the seller side.
 
 A proxy that reports its own seat model in the response takes over entirely:
 if `gumpress.seats` carries a `limit` (or `unlimited`), GumPress defers to
